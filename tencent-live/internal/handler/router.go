@@ -27,17 +27,16 @@ func NewRouter(streamService *service.StreamService, callbackKey string) *gin.En
 	streamHandler := NewStreamHandler(streamService)
 	callbackHandler := NewCallbackHandler(streamService, callbackKey)
 
-	// 腾讯云回调接口（不需要鉴权）
-	// 统一入口：处理推流/断流/录制/截图/审核/异常等所有回调
-	callback := r.Group("/callback")
+	v1 := r.Group("/v1")
 	{
-		callback.POST("/event", callbackHandler.HandleCallback)  // 推荐使用
-		callback.POST("/push", callbackHandler.HandleCallback)   // 兼容旧配置
+		// 腾讯云回调接口（不需要鉴权）
+		// 统一入口：处理推流/断流/录制/截图/审核/异常等所有回调
+		v1.POST("/callback/event", callbackHandler.HandleCallback)
 	}
 
-	v1 := r.Group("/api/v1")
+	api := r.Group("/api/v1")
 	{
-		stream := v1.Group("/stream")
+		stream := api.Group("/stream")
 		{
 			stream.POST("/create", streamHandler.Create)
 			stream.POST("/close", streamHandler.Close)

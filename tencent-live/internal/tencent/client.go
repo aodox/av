@@ -1,6 +1,8 @@
 package tencent
 
 import (
+	"time"
+
 	"tencent-live/internal/config"
 	"tencent-live/internal/logger"
 
@@ -77,7 +79,8 @@ func (c *Client) ForbidStream(streamName string, resumeTime int64) error {
 	request.DomainName = &domainName
 	request.StreamName = &streamName
 	if resumeTime > 0 {
-		request.ResumeTime = &resumeTime
+		resumeTimeStr := time.Unix(resumeTime, 0).Format("2006-01-02T15:04:05Z")
+		request.ResumeTime = &resumeTimeStr
 	}
 
 	_, err := c.client.ForbidLiveStream(request)
@@ -164,10 +167,10 @@ func (c *Client) CreateMixStream(cfg MixStreamConfig) error {
 	var inputList []*live.CommonMixInputParam
 	for _, input := range cfg.Inputs {
 		streamName := input.StreamName
-		x := input.X
-		y := input.Y
-		w := input.Width
-		h := input.Height
+		x := float64(input.X)
+		y := float64(input.Y)
+		w := float64(input.Width)
+		h := float64(input.Height)
 		layer := input.Layer
 
 		inputList = append(inputList, &live.CommonMixInputParam{

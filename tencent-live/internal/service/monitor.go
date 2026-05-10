@@ -36,6 +36,12 @@ type Monitor struct {
 	qpsLimiter *QPSLimiter
 }
 
+// streamTask 监控任务
+type streamTask struct {
+	offset int
+	limit  int
+}
+
 // QPSLimiter QPS限流器
 type QPSLimiter struct {
 	maxQPS     int64
@@ -170,10 +176,6 @@ func (m *Monitor) checkAllStreamsConcurrently() {
 	logger.Infof("monitor: checking %d active streams", total)
 
 	// 使用 channel 分发任务
-	type streamTask struct {
-		offset int
-		limit  int
-	}
 	taskCh := make(chan streamTask, 100)
 	var processedCount int64
 	var errorCount int64
@@ -207,7 +209,7 @@ func (m *Monitor) checkAllStreamsConcurrently() {
 		atomic.LoadInt64(&processedCount), atomic.LoadInt64(&errorCount), time.Since(now))
 }
 
-func (m *Monitor) worker(ctx context.Context, workerID int, taskCh <-chan struct{ offset, limit int },
+func (m *Monitor) worker(ctx context.Context, workerID int, taskCh <-chan streamTask,
 	now time.Time, processedCount, errorCount *int64) {
 
 	for task := range taskCh {

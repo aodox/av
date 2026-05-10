@@ -81,6 +81,58 @@ CREATE TABLE `stream_daily_logs` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='每日直播时长统计表';
 
 -- ============================================================
+-- 回调日志表
+-- 存储所有腾讯云回调记录，用于问题排查和数据分析
+-- ============================================================
+DROP TABLE IF EXISTS `callback_logs`;
+CREATE TABLE `callback_logs` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '自增主键',
+    `event_type` INT NOT NULL COMMENT '事件类型: 0=断流, 1=推流, 100=录制, 200=截图, 等',
+    `event_name` VARCHAR(32) DEFAULT NULL COMMENT '事件名称',
+    `stream_id` VARCHAR(128) DEFAULT NULL COMMENT '流名称',
+    `app_name` VARCHAR(64) DEFAULT NULL COMMENT '应用名称',
+    `user_ip` VARCHAR(64) DEFAULT NULL COMMENT '用户IP',
+    `event_time` BIGINT DEFAULT 0 COMMENT '事件时间戳',
+    
+    -- 断流相关
+    `push_duration` BIGINT DEFAULT 0 COMMENT '推流时长(毫秒)',
+    `errcode` INT DEFAULT 0 COMMENT '错误码',
+    `errmsg` VARCHAR(256) DEFAULT NULL COMMENT '错误信息',
+    
+    -- 录制相关
+    `video_id` VARCHAR(128) DEFAULT NULL COMMENT '点播文件ID',
+    `video_url` TEXT DEFAULT NULL COMMENT '录制文件URL',
+    `file_size` BIGINT DEFAULT 0 COMMENT '文件大小(字节)',
+    `file_format` VARCHAR(16) DEFAULT NULL COMMENT '文件格式',
+    `duration` BIGINT DEFAULT 0 COMMENT '录制时长(秒)',
+    `task_id` VARCHAR(128) DEFAULT NULL COMMENT '任务ID',
+    `status` VARCHAR(32) DEFAULT NULL COMMENT '状态',
+    
+    -- 截图相关
+    `pic_url` TEXT DEFAULT NULL COMMENT '截图URL',
+    
+    -- 审核相关
+    `confidence` DECIMAL(5,2) DEFAULT 0 COMMENT '置信度',
+    `porn_score` DECIMAL(5,2) DEFAULT 0 COMMENT '涉黄分数',
+    
+    -- 异常相关
+    `exception_type` INT DEFAULT 0 COMMENT '异常类型',
+    `exception_msg` TEXT DEFAULT NULL COMMENT '异常信息',
+    
+    -- 原始数据（完整JSON，方便排查）
+    `raw_data` TEXT DEFAULT NULL COMMENT '原始回调JSON数据',
+    
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    
+    PRIMARY KEY (`id`),
+    KEY `idx_event_type` (`event_type`),
+    KEY `idx_stream_id` (`stream_id`),
+    KEY `idx_event_time` (`event_time`),
+    KEY `idx_created_at` (`created_at`),
+    KEY `idx_errcode` (`errcode`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='腾讯云回调日志表';
+
+-- ============================================================
 -- 创建索引优化查询
 -- ============================================================
 
@@ -89,6 +141,25 @@ CREATE TABLE `stream_daily_logs` (
 
 -- 用于回调时快速查找流
 -- SELECT * FROM streams WHERE stream_name = 'xxx' AND status = 1;
+
+-- 按事件类型查询回调日志
+-- SELECT * FROM callback_logs WHERE event_type = 0 ORDER BY created_at DESC LIMIT 100;
+
+-- 按流名称查询回调日志
+-- SELECT * FROM callback_logs WHERE stream_id = 'xxx' ORDER BY created_at DESC;
+
+-- ============================================================
+-- 事件类型说明
+-- ============================================================
+-- event_type = 0:   断流回调
+-- event_type = 1:   推流回调
+-- event_type = 100: 录制文件回调
+-- event_type = 200: 截图回调
+-- event_type = 317: 图片审核(鉴黄)回调
+-- event_type = 318: 音频审核回调
+-- event_type = 321: 推流异常回调
+-- event_type = 332: 录制状态回调
+-- event_type = 341: 录制异常回调
 
 -- ============================================================
 -- 示例数据（可选）

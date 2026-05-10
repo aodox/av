@@ -36,7 +36,7 @@ func Init(cfg config.MySQLConfig) error {
 		sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetime) * time.Second)
 	}
 
-	if err := db.AutoMigrate(&model.Stream{}, &model.StreamDailyLog{}); err != nil {
+	if err := db.AutoMigrate(&model.Stream{}, &model.StreamDailyLog{}, &model.CallbackLog{}); err != nil {
 		return fmt.Errorf("auto migrate error: %w", err)
 	}
 
@@ -237,4 +237,51 @@ func GetStreamByStreamName(streamName string) (*model.Stream, error) {
 		return nil, err
 	}
 	return &stream, nil
+}
+
+// ==================== 回调日志操作 ====================
+
+// CreateCallbackLog 创建回调日志
+func CreateCallbackLog(log *model.CallbackLog) error {
+	return DB.Create(log).Error
+}
+
+// GetCallbackLogsByStreamID 获取指定流的回调日志
+func GetCallbackLogsByStreamID(streamID string, limit int) ([]model.CallbackLog, error) {
+	var logs []model.CallbackLog
+	err := DB.Where("stream_id = ?", streamID).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&logs).Error
+	return logs, err
+}
+
+// GetCallbackLogsByEventType 获取指定事件类型的回调日志
+func GetCallbackLogsByEventType(eventType int, limit int) ([]model.CallbackLog, error) {
+	var logs []model.CallbackLog
+	err := DB.Where("event_type = ?", eventType).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&logs).Error
+	return logs, err
+}
+
+// GetRecentCallbackLogs 获取最近的回调日志
+func GetRecentCallbackLogs(limit int) ([]model.CallbackLog, error) {
+	var logs []model.CallbackLog
+	err := DB.Order("created_at DESC").
+		Limit(limit).
+		Find(&logs).Error
+	return logs, err
+}
+
+// GetCallbackLogStats 获取回调统计（按事件类型）
+func GetCallbackLogStats(startTime, endTime string) ([]map[string]interface{}, error) {
+	var results []map[string]interface{}
+	err := DB.Model(&model.CallbackLog{}).
+		Select("event_type, event_name, COUNT(*) as count").
+		Where("created_at BETWEEN ? AND ?", startTime, endTime).
+		Group("event_type, event_name").
+		Find(&results).Error
+	return results, err
 }

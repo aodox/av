@@ -2,6 +2,53 @@
 
 一个**企业级高并发**的腾讯云直播流管理服务，**单实例支持千万级并发开播**。
 
+## 环境要求
+
+| 环境 | 版本要求 | 说明 |
+|------|---------|------|
+| Go | >= 1.26 | 编译环境 |
+| MySQL | >= 5.7 | 数据持久化 |
+| Redis | >= 6.0 | 高速缓存 |
+
+## 依赖版本
+
+> ⚠️ **重要**：请严格使用以下版本，避免因版本差异导致的兼容性问题。
+
+| 依赖包 | 版本 | 说明 |
+|--------|------|------|
+| github.com/gin-gonic/gin | v1.12.0 | HTTP Web框架 |
+| github.com/redis/go-redis/v9 | v9.18.0 | Redis客户端（注意：v9新路径） |
+| github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common | v1.3.93 | 腾讯云SDK公共模块 |
+| github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/live | v1.3.93 | 腾讯云直播SDK |
+| gorm.io/gorm | v1.31.1 | ORM框架 |
+| gorm.io/driver/mysql | v1.6.0 | GORM MySQL驱动 |
+| go.uber.org/zap | v1.27.0 | 日志库 |
+| gopkg.in/natefinch/lumberjack.v2 | v2.2.1 | 日志轮转 |
+| gopkg.in/yaml.v3 | v3.0.1 | YAML解析 |
+| github.com/google/uuid | v1.6.0 | UUID生成 |
+
+### 依赖安装
+
+```bash
+# 进入项目目录
+cd tencent-live
+
+# 自动下载依赖（使用 go.mod 中指定的版本）
+go mod tidy
+
+# 或手动安装指定版本
+go get github.com/gin-gonic/gin@v1.12.0
+go get github.com/redis/go-redis/v9@v9.18.0
+go get github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common@v1.3.93
+go get github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/live@v1.3.93
+```
+
+### 版本更新记录
+
+| 日期 | 变更 |
+|------|------|
+| 2026-05-10 | 初始版本，依赖更新至最新稳定版 |
+
 ## 核心特性
 
 - **千万级并发**：单实例支持 1000 万人同时开播
@@ -97,13 +144,63 @@
 
 ### 1. 配置腾讯云回调
 
-在腾讯云控制台配置：
+> 参考文档：[腾讯云直播回调配置](https://cloud.tencent.com/document/product/267/20388)
 
-1. 进入 **云直播** → **功能配置** → **直播回调**
-2. 创建回调模板：
-   - 推流回调 URL：`http://YOUR_IP:8080/callback/push`
-   - 断流回调 URL：`http://YOUR_IP:8080/callback/push`
-3. 将模板绑定到推流域名
+**步骤一：登录腾讯云控制台**
+
+进入 **云直播** → **功能配置** → **直播回调** → **创建模板**
+
+**步骤二：填写回调模板配置**
+
+| 配置项 | 值 | 说明 |
+|--------|-----|------|
+| 模板名称 | `tencent-live-callback` | 自定义名称 |
+| 模板描述 | `直播推流断流回调` | 可选 |
+| 回调密钥 | `your_callback_key` | **重要**：需与 config.yaml 中 `callback_key` 一致 |
+
+**步骤三：选择回调类型并填写URL**
+
+所有回调类型都使用**同一个URL**，系统通过 `event_type` 字段区分事件类型。
+
+**标准回调**（全部勾选）：
+
+| 回调类型 | URL | event_type | 说明 |
+|---------|-----|------------|------|
+| ✅ 推流回调 | `http://YOUR_IP:8080/callback/push` | 1 | 开始推流 |
+| ✅ 断流回调 | `http://YOUR_IP:8080/callback/push` | 0 | 断开推流 |
+| ✅ 录制文件回调 | `http://YOUR_IP:8080/callback/push` | 100 | 录制完成 |
+| ✅ 截图回调 | `http://YOUR_IP:8080/callback/push` | 200 | 截图完成 |
+| ✅ 录制状态回调 | `http://YOUR_IP:8080/callback/push` | 332 | 录制状态变化 |
+| ✅ 图片审核回调 | `http://YOUR_IP:8080/callback/push` | 317 | 鉴黄结果 |
+| ✅ 音频审核回调 | `http://YOUR_IP:8080/callback/push` | 318 | 音频审核 |
+
+**异常事件回调**：
+
+| 回调类型 | URL | event_type | 说明 |
+|---------|-----|------------|------|
+| ✅ 推流异常回调 | `http://YOUR_IP:8080/callback/push` | 321 | 推流异常 |
+| ✅ 录制异常回调 | `http://YOUR_IP:8080/callback/push` | 341 | 录制异常 |
+
+> **注意**：所有回调都使用同一个URL，系统会自动识别并处理不同类型。
+
+**步骤四：绑定推流域名**
+
+1. 点击 **绑定域名**
+2. 选择刚创建的回调模板
+3. 选择推流域名（可多选）
+4. 点击 **确定**
+
+> ⚠️ 模板配置完后续大约 **5-10分钟** 生效。
+
+**回调签名验证**
+
+腾讯云回调请求会带上签名参数，本服务会验证签名防止伪造请求：
+
+```
+sign = MD5(callback_key + t)
+```
+
+配置文件中的 `callback_key` 必须与腾讯云控制台的 **回调密钥** 完全一致。
 
 ### 2. 初始化数据库
 
@@ -315,6 +412,41 @@ Redis: pool_size=1000
 ### Q: 如果回调丢失怎么办？
 
 监控模块会作为备用，定时检查流状态。可通过配置 `monitor.enabled` 控制。
+
+### Q: 回调数据存储在哪里？
+
+**所有回调数据都会记录到数据库 `callback_logs` 表**，包括：
+
+- 原始JSON数据（`raw_data`字段）
+- 关键字段解析后的结构化数据
+- 事件时间、事件类型、流ID等
+
+**查询示例**：
+
+```sql
+-- 查看最近100条回调记录
+SELECT * FROM callback_logs ORDER BY created_at DESC LIMIT 100;
+
+-- 查看某个流的所有回调
+SELECT * FROM callback_logs WHERE stream_id = 'customer001_10001' ORDER BY created_at DESC;
+
+-- 按事件类型统计
+SELECT event_type, event_name, COUNT(*) as count 
+FROM callback_logs 
+WHERE created_at >= '2026-05-01'
+GROUP BY event_type, event_name;
+
+-- 查看断流错误统计
+SELECT errcode, COUNT(*) as count 
+FROM callback_logs 
+WHERE event_type = 0 AND errcode > 0
+GROUP BY errcode;
+
+-- 查看审核告警（涉黄分数>80）
+SELECT * FROM callback_logs 
+WHERE event_type = 317 AND porn_score > 80
+ORDER BY created_at DESC;
+```
 
 ### Q: 支持多少个客户同时使用？
 

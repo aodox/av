@@ -559,11 +559,11 @@ func (s *StreamService) HandleStreamStateChange(stream *model.Stream, state tenc
 		}
 
 		if retryCount >= 3 {
-			s.CloseStream(stream.UID, stream.StreamID)
+			s.CloseStream(stream.AppID, stream.UID, stream.StreamID)
 		}
 
 	case tencent.StreamStateForbid:
 		logger.Warnf("stream forbidden: uid=%d, streamID=%s", stream.UID, stream.StreamID)
-		s.CloseStream(stream.UID, stream.StreamID)
+		s.CloseStream(stream.AppID, stream.UID, stream.StreamID)
 	}
 }

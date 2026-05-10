@@ -1,7 +1,7 @@
 # 腾讯云直播服务 - API 接口文档
 
-> 版本：v1.0.0  
-> 更新时间：2026-05-10
+> 版本：v1.1.0  
+> 更新时间：2026-05-11
 
 ---
 
@@ -152,11 +152,12 @@ Content-Type: application/json
 **请求**
 
 ```
-GET /api/v1/stream/push-url?uid=10001&stream_id=xxx
+GET /api/v1/stream/push-url?app_id=customer_001&uid=10001&stream_id=xxx
 ```
 
 | 参数 | 必填 | 说明 |
 |------|------|------|
+| app_id | 否 | 多租户标识，推荐传递 |
 | uid | 是 | 用户ID |
 | stream_id | 否 | 流ID |
 
@@ -187,8 +188,14 @@ GET /api/v1/stream/push-url?uid=10001&stream_id=xxx
 **请求**
 
 ```
-GET /api/v1/stream/play-url?uid=10001&stream_id=xxx
+GET /api/v1/stream/play-url?app_id=customer_001&uid=10001&stream_id=xxx
 ```
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| app_id | 否 | 多租户标识，推荐传递 |
+| uid | 是 | 用户ID |
+| stream_id | 否 | 流ID |
 
 **响应**
 
@@ -216,8 +223,14 @@ GET /api/v1/stream/play-url?uid=10001&stream_id=xxx
 **请求**
 
 ```
-GET /api/v1/stream/status?uid=10001&stream_id=xxx
+GET /api/v1/stream/status?app_id=customer_001&uid=10001&stream_id=xxx
 ```
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| app_id | 否 | 多租户标识，推荐传递 |
+| uid | 是 | 用户ID |
+| stream_id | 否 | 流ID |
 
 **响应**
 
@@ -252,14 +265,16 @@ GET /api/v1/stream/status?uid=10001&stream_id=xxx
 **请求**
 
 ```
-GET /api/v1/stream/list?page=1&page_size=20&status=1
+GET /api/v1/stream/list?app_id=customer_001&uid=10001&page=1&page_size=20&status=1
 ```
 
 | 参数 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
+| app_id | 否 | - | 多租户标识，**强烈推荐传递** |
+| uid | 否 | - | 用户ID筛选 |
 | page | 否 | 1 | 页码 |
 | page_size | 否 | 20 | 每页数量（最大100） |
-| status | 否 | - | 状态筛选 |
+| status | 否 | - | 状态筛选（0=未开播, 1=直播中, 2=已关播） |
 
 **响应**
 
@@ -343,13 +358,24 @@ GET /health
 
 ## 六、多租户说明
 
-### 6.1 app_id 使用
+### 6.1 app_id 使用规范
 
-- 通过 `app_id` 字段区分不同租户
-- 不传则默认为 `"default"`
-- 同一 `uid` 在不同 `app_id` 下互不冲突
+| 场景 | app_id 是否必须 | 说明 |
+|------|----------------|------|
+| 创建流 | **强烈推荐** | 不传则默认为 `"default"` |
+| 关闭流 | **强烈推荐** | 确保关闭正确租户的流 |
+| 查询接口 | **强烈推荐** | 防止跨租户数据泄露 |
+| 列表查询 | **强烈推荐** | 按租户筛选数据 |
 
-### 6.2 流名称格式
+> ⚠️ **最佳实践**：所有接口都应传递 `app_id`，确保多租户数据隔离。
+
+### 6.2 数据隔离机制
+
+- 同一 `uid` 在不同 `app_id` 下完全独立
+- 数据库层使用复合索引 `(app_id, uid, status)` 优化查询
+- 所有查询自动按 `app_id` 过滤
+
+### 6.3 流名称格式
 
 ```
 stream_name = {app_id}_{uid}
@@ -358,6 +384,23 @@ stream_id = {app_id}_{uid}_{timestamp}
 示例：
 stream_name = customer_001_10001
 stream_id = customer_001_10001_1699999999
+```
+
+### 6.4 典型用法
+
+**查询某租户某主播的当前直播**：
+```
+GET /api/v1/stream/status?app_id=customer_001&uid=10001
+```
+
+**查询某租户所有正在直播的流**：
+```
+GET /api/v1/stream/list?app_id=customer_001&status=1
+```
+
+**查询某主播的历史直播记录**：
+```
+GET /api/v1/stream/list?app_id=customer_001&uid=10001
 ```
 
 ---

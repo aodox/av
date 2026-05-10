@@ -71,9 +71,21 @@ func CreateStream(stream *model.Stream) error {
 	return DB.Create(stream).Error
 }
 
+// GetStreamByUID 根据用户ID获取活跃流
+// Deprecated: 此方法不支持多租户隔离，请使用 GetStreamByAppIDAndUID 替代
 func GetStreamByUID(uid int64) (*model.Stream, error) {
 	var stream model.Stream
 	err := DB.Where("uid = ? AND status = ?", uid, model.StreamStatusActive).First(&stream).Error
+	if err != nil {
+		return nil, err
+	}
+	return &stream, nil
+}
+
+// GetStreamByAppIDAndUID 根据租户ID和用户ID获取活跃流（多租户安全）
+func GetStreamByAppIDAndUID(appID string, uid int64) (*model.Stream, error) {
+	var stream model.Stream
+	err := DB.Where("app_id = ? AND uid = ? AND status = ?", appID, uid, model.StreamStatusActive).First(&stream).Error
 	if err != nil {
 		return nil, err
 	}
@@ -111,12 +123,24 @@ func GetActiveStreamsCount() (int64, error) {
 	return count, err
 }
 
-// ListStreamsWithPagination 分页列表（对外接口用）
-func ListStreamsWithPagination(page model.PageRequest, status *int) ([]model.Stream, int64, error) {
+// ListStreamsWithPagination 分页列表（对外接口用，支持多租户过滤）
+func ListStreamsWithPagination(page model.PageRequest, appID string, uid *int64, status *int) ([]model.Stream, int64, error) {
 	var streams []model.Stream
 	var total int64
 
 	query := DB.Model(&model.Stream{})
+	
+	// 多租户过滤（必须）
+	if appID != "" {
+		query = query.Where("app_id = ?", appID)
+	}
+	
+	// 用户过滤（可选）
+	if uid != nil {
+		query = query.Where("uid = ?", *uid)
+	}
+	
+	// 状态过滤（可选）
 	if status != nil {
 		query = query.Where("status = ?", *status)
 	}
@@ -132,13 +156,17 @@ func ListStreamsWithPagination(page model.PageRequest, status *int) ([]model.Str
 	return streams, total, err
 }
 
-// BatchGetStreamsByUIDs 批量获取流信息
-func BatchGetStreamsByUIDs(uids []int64) ([]model.Stream, error) {
+// BatchGetStreamsByUIDs 批量获取流信息（支持多租户）
+func BatchGetStreamsByUIDs(appID string, uids []int64) ([]model.Stream, error) {
 	var streams []model.Stream
 	if len(uids) == 0 {
 		return streams, nil
 	}
-	err := DB.Where("uid IN ? AND status = ?", uids, model.StreamStatusActive).Find(&streams).Error
+	query := DB.Where("uid IN ? AND status = ?", uids, model.StreamStatusActive)
+	if appID != "" {
+		query = query.Where("app_id = ?", appID)
+	}
+	err := query.Find(&streams).Error
 	return streams, err
 }
 
@@ -156,12 +184,17 @@ func IncrStreamDuration(streamID string, duration int64) error {
 		UpdateColumn("duration", gorm.Expr("duration + ?", duration)).Error
 }
 
-func UpdateOrCreateDailyLog(uid int64, date string, duration int64) error {
+// UpdateOrCreateDailyLog 更新或创建每日统计（支持多租户）
+func UpdateOrCreateDailyLog(appID string, uid int64, date string, duration int64) error {
+	if appID == "" {
+		appID = "default"
+	}
 	var log model.StreamDailyLog
-	err := DB.Where("uid = ? AND date = ?", uid, date).First(&log).Error
+	err := DB.Where("app_id = ? AND uid = ? AND date = ?", appID, uid, date).First(&log).Error
 
 	if err == gorm.ErrRecordNotFound {
 		log = model.StreamDailyLog{
+			AppID:       appID,
 			UID:         uid,
 			Date:        date,
 			Duration:    duration,
@@ -210,21 +243,26 @@ func BatchUpdateStreams(streams []*model.Stream) error {
 	return tx.Commit().Error
 }
 
-// BatchUpsertDailyLogs 批量更新或插入每日统计
+// BatchUpsertDailyLogs 批量更新或插入每日统计（支持多租户）
 func BatchUpsertDailyLogs(logs []*model.StreamDailyLog) error {
 	if len(logs) == 0 {
 		return nil
 	}
 
-	// 聚合相同 uid+date 的数据
+	// 聚合相同 app_id+uid+date 的数据（多租户安全）
 	aggregated := make(map[string]*model.StreamDailyLog)
 	for _, log := range logs {
-		key := fmt.Sprintf("%d_%s", log.UID, log.Date)
+		appID := log.AppID
+		if appID == "" {
+			appID = "default"
+		}
+		key := fmt.Sprintf("%s_%d_%s", appID, log.UID, log.Date)
 		if existing, ok := aggregated[key]; ok {
 			existing.Duration += log.Duration
 			existing.StreamCount += log.StreamCount
 		} else {
 			aggregated[key] = &model.StreamDailyLog{
+				AppID:       appID,
 				UID:         log.UID,
 				Date:        log.Date,
 				Duration:    log.Duration,
@@ -233,16 +271,16 @@ func BatchUpsertDailyLogs(logs []*model.StreamDailyLog) error {
 		}
 	}
 
-	// 批量 upsert
+	// 批量 upsert（包含 app_id 字段）
 	for _, log := range aggregated {
 		err := DB.Exec(`
-			INSERT INTO stream_daily_logs (uid, date, duration, stream_count, created_at, updated_at)
-			VALUES (?, ?, ?, ?, NOW(), NOW())
+			INSERT INTO stream_daily_logs (app_id, uid, date, duration, stream_count, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, NOW(), NOW())
 			ON DUPLICATE KEY UPDATE 
 				duration = duration + VALUES(duration),
 				stream_count = stream_count + VALUES(stream_count),
 				updated_at = NOW()
-		`, log.UID, log.Date, log.Duration, log.StreamCount).Error
+		`, log.AppID, log.UID, log.Date, log.Duration, log.StreamCount).Error
 		if err != nil {
 			return err
 		}

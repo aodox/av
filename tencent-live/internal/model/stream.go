@@ -29,11 +29,11 @@ type PlayURLs struct {
 
 type Stream struct {
 	ID            int64        `gorm:"primaryKey;autoIncrement" json:"id"`
-	AppID         string       `gorm:"type:varchar(32);index;not null;default:'default'" json:"app_id"` // 多租户标识
-	UID           int64        `gorm:"index;not null" json:"uid"`
+	AppID         string       `gorm:"type:varchar(32);not null;default:'default';index:idx_app_uid_status,priority:1" json:"app_id"` // 多租户标识
+	UID           int64        `gorm:"not null;index:idx_app_uid_status,priority:2" json:"uid"`
 	StreamID      string       `gorm:"type:varchar(64);uniqueIndex;not null" json:"stream_id"`
 	StreamName    string       `gorm:"type:varchar(128);index;not null" json:"stream_name"`
-	Status        StreamStatus `gorm:"type:tinyint;default:0;index" json:"status"`
+	Status        StreamStatus `gorm:"type:tinyint;default:0;index:idx_app_uid_status,priority:3" json:"status"` // 复合索引用于多租户查询
 	Duration      int64        `gorm:"default:0" json:"duration"`
 	InactiveRetry int          `gorm:"default:0" json:"-"`
 
@@ -129,6 +129,7 @@ type CloseStreamRequest struct {
 }
 
 type GetURLRequest struct {
+	AppID    string `form:"app_id"`                    // 多租户标识
 	UID      int64  `form:"uid" binding:"required"`
 	StreamID string `form:"stream_id"`
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -149,10 +150,12 @@ func (s *StreamService) CreateStream(appID string, uid int64) (*model.CreateStre
 	}, nil
 }
 
-func (s *StreamService) buildCacheKey(appID string, uid int64) int64 {
-	// 简单hash：用于Redis的key，保持向后兼容
-	// 实际业务中可以用 appID_uid 作为string key
-	return uid
+func (s *StreamService) buildCacheKey(appID string, uid int64) string {
+	// 多租户缓存键：app_id + uid 组合，确保不同租户的相同uid不会冲突
+	if appID == "" {
+		appID = DefaultAppID
+	}
+	return fmt.Sprintf("%s:%d", appID, uid)
 }
 
 // forceCloseStream 强制关闭流（用于处理旧流未关闭的情况）
@@ -343,7 +346,8 @@ func (s *StreamService) CloseStream(appID string, uid int64, streamID string) er
 		if activeStreamID != "" {
 			stream, err = s.getStream(activeStreamID)
 		} else {
-			stream, err = db.GetStreamByUID(uid)
+			// 使用多租户安全的查询方法
+			stream, err = db.GetStreamByAppIDAndUID(appID, uid)
 		}
 	}
 
@@ -392,8 +396,12 @@ func (s *StreamService) CloseStream(appID string, uid int64, streamID string) er
 	return nil
 }
 
-func (s *StreamService) GetPushURLs(uid int64, streamID string) (*model.PushURLResponse, error) {
-	stream, err := s.getActiveStream(uid, streamID)
+func (s *StreamService) GetPushURLs(appID string, uid int64, streamID string) (*model.PushURLResponse, error) {
+	if appID == "" {
+		appID = DefaultAppID
+	}
+	
+	stream, err := s.getActiveStream(appID, uid, streamID)
 	if err != nil {
 		return nil, err
 	}
@@ -418,8 +426,12 @@ func (s *StreamService) GetPushURLs(uid int64, streamID string) (*model.PushURLR
 	}, nil
 }
 
-func (s *StreamService) GetPlayURLs(uid int64, streamID string) (*model.PlayURLResponse, error) {
-	stream, err := s.getActiveStream(uid, streamID)
+func (s *StreamService) GetPlayURLs(appID string, uid int64, streamID string) (*model.PlayURLResponse, error) {
+	if appID == "" {
+		appID = DefaultAppID
+	}
+	
+	stream, err := s.getActiveStream(appID, uid, streamID)
 	if err != nil {
 		return nil, err
 	}
@@ -443,8 +455,12 @@ func (s *StreamService) GetPlayURLs(uid int64, streamID string) (*model.PlayURLR
 	}, nil
 }
 
-func (s *StreamService) GetStreamStatus(uid int64, streamID string) (*model.StreamStatusResponse, error) {
-	stream, err := s.getActiveStream(uid, streamID)
+func (s *StreamService) GetStreamStatus(appID string, uid int64, streamID string) (*model.StreamStatusResponse, error) {
+	if appID == "" {
+		appID = DefaultAppID
+	}
+	
+	stream, err := s.getActiveStream(appID, uid, streamID)
 	if err != nil {
 		return nil, err
 	}
@@ -468,9 +484,9 @@ func (s *StreamService) ListActiveStreams() ([]model.Stream, error) {
 	return db.GetActiveStreams()
 }
 
-// ListStreamsWithPagination 分页获取流列表
+// ListStreamsWithPagination 分页获取流列表（支持多租户过滤）
 func (s *StreamService) ListStreamsWithPagination(req model.ListStreamsRequest) (*model.ListStreamsResponse, error) {
-	streams, total, err := db.ListStreamsWithPagination(req.PageRequest, req.Status)
+	streams, total, err := db.ListStreamsWithPagination(req.PageRequest, req.AppID, req.UID, req.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -491,17 +507,23 @@ func (s *StreamService) ListStreamsWithPagination(req model.ListStreamsRequest) 
 	}, nil
 }
 
-func (s *StreamService) getActiveStream(uid int64, streamID string) (*model.Stream, error) {
+func (s *StreamService) getActiveStream(appID string, uid int64, streamID string) (*model.Stream, error) {
+	// 如果指定了 streamID，直接查询
 	if streamID != "" {
 		return s.getStream(streamID)
 	}
 
-	activeStreamID, _ := cache.GetActiveStreamID(uid)
+	// 构建多租户缓存键
+	cacheKey := s.buildCacheKey(appID, uid)
+	
+	// 先从缓存查找活跃流
+	activeStreamID, _ := cache.GetActiveStreamID(cacheKey)
 	if activeStreamID != "" {
 		return s.getStream(activeStreamID)
 	}
 
-	stream, err := db.GetStreamByUID(uid)
+	// 缓存未命中，从数据库查询（使用多租户安全的查询）
+	stream, err := db.GetStreamByAppIDAndUID(appID, uid)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrStreamNotFound
@@ -556,10 +578,13 @@ func (s *StreamService) calculateDuration(stream *model.Stream, now time.Time) i
 	return duration
 }
 
-func (s *StreamService) updateDailyLog(uid int64, duration int64) {
+func (s *StreamService) updateDailyLog(appID string, uid int64, duration int64) {
+	if appID == "" {
+		appID = DefaultAppID
+	}
 	date := time.Now().Format("2006-01-02")
-	if err := db.UpdateOrCreateDailyLog(uid, date, duration); err != nil {
-		logger.Errorf("update daily log error: uid=%d, err=%v", uid, err)
+	if err := db.UpdateOrCreateDailyLog(appID, uid, date, duration); err != nil {
+		logger.Errorf("update daily log error: appID=%s, uid=%d, err=%v", appID, uid, err)
 	}
 }
 
@@ -575,20 +600,20 @@ func (s *StreamService) HandleStreamStateChange(stream *model.Stream, state tenc
 		stream.Duration += duration
 		db.UpdateStream(stream)
 
-		s.updateDailyLog(stream.UID, duration)
+		s.updateDailyLog(stream.AppID, stream.UID, duration)
 
-		logger.Debugf("stream active: uid=%d, streamID=%s, duration=%d", stream.UID, stream.StreamID, duration)
+		logger.Debugf("stream active: appID=%s, uid=%d, streamID=%s, duration=%d", stream.AppID, stream.UID, stream.StreamID, duration)
 
 	case tencent.StreamStateInactive:
 		retryCount, _ := cache.IncrRetryCount(stream.StreamID)
-		logger.Infof("stream inactive: uid=%d, streamID=%s, retry=%d", stream.UID, stream.StreamID, retryCount)
+		logger.Infof("stream inactive: appID=%s, uid=%d, streamID=%s, retry=%d", stream.AppID, stream.UID, stream.StreamID, retryCount)
 
 		if retryCount == 1 {
 			cache.SetLastUpdateTime(stream.StreamID, now)
 			stream.LastCheckTime = &now
 			stream.Duration += duration
 			db.UpdateStream(stream)
-			s.updateDailyLog(stream.UID, duration)
+			s.updateDailyLog(stream.AppID, stream.UID, duration)
 		}
 
 		if retryCount >= 3 {

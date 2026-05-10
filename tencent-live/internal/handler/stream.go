@@ -108,21 +108,21 @@ func (h *StreamHandler) GetPushURL(c *gin.Context) {
 		return
 	}
 
-	logger.Debugf("[API_PUSH_URL] request: uid=%d, streamID=%s", req.UID, req.StreamID)
+	logger.Debugf("[API_PUSH_URL] request: appID=%s, uid=%d, streamID=%s", req.AppID, req.UID, req.StreamID)
 
-	resp, err := h.streamService.GetPushURLs(req.UID, req.StreamID)
+	resp, err := h.streamService.GetPushURLs(req.AppID, req.UID, req.StreamID)
 	if err != nil {
 		if errors.Is(err, service.ErrStreamNotFound) {
-			logger.Warnf("[API_PUSH_URL] not found: uid=%d, streamID=%s", req.UID, req.StreamID)
+			logger.Warnf("[API_PUSH_URL] not found: appID=%s, uid=%d, streamID=%s", req.AppID, req.UID, req.StreamID)
 			fail(c, 404, "stream not found")
 			return
 		}
-		logger.Errorf("[API_PUSH_URL] failed: uid=%d, streamID=%s, err=%v", req.UID, req.StreamID, err)
+		logger.Errorf("[API_PUSH_URL] failed: appID=%s, uid=%d, streamID=%s, err=%v", req.AppID, req.UID, req.StreamID, err)
 		fail(c, 500, "get push url failed: "+err.Error())
 		return
 	}
 
-	logger.Debugf("[API_PUSH_URL] success: uid=%d, streamID=%s", req.UID, resp.StreamID)
+	logger.Debugf("[API_PUSH_URL] success: appID=%s, uid=%d, streamID=%s", req.AppID, req.UID, resp.StreamID)
 	success(c, resp)
 }
 
@@ -133,21 +133,21 @@ func (h *StreamHandler) GetPlayURL(c *gin.Context) {
 		return
 	}
 
-	logger.Debugf("[API_PLAY_URL] request: uid=%d, streamID=%s", req.UID, req.StreamID)
+	logger.Debugf("[API_PLAY_URL] request: appID=%s, uid=%d, streamID=%s", req.AppID, req.UID, req.StreamID)
 
-	resp, err := h.streamService.GetPlayURLs(req.UID, req.StreamID)
+	resp, err := h.streamService.GetPlayURLs(req.AppID, req.UID, req.StreamID)
 	if err != nil {
 		if errors.Is(err, service.ErrStreamNotFound) {
-			logger.Warnf("[API_PLAY_URL] not found: uid=%d, streamID=%s", req.UID, req.StreamID)
+			logger.Warnf("[API_PLAY_URL] not found: appID=%s, uid=%d, streamID=%s", req.AppID, req.UID, req.StreamID)
 			fail(c, 404, "stream not found")
 			return
 		}
-		logger.Errorf("[API_PLAY_URL] failed: uid=%d, streamID=%s, err=%v", req.UID, req.StreamID, err)
+		logger.Errorf("[API_PLAY_URL] failed: appID=%s, uid=%d, streamID=%s, err=%v", req.AppID, req.UID, req.StreamID, err)
 		fail(c, 500, "get play url failed: "+err.Error())
 		return
 	}
 
-	logger.Debugf("[API_PLAY_URL] success: uid=%d, streamID=%s", req.UID, resp.StreamID)
+	logger.Debugf("[API_PLAY_URL] success: appID=%s, uid=%d, streamID=%s", req.AppID, req.UID, resp.StreamID)
 	success(c, resp)
 }
 
@@ -158,21 +158,21 @@ func (h *StreamHandler) GetStatus(c *gin.Context) {
 		return
 	}
 
-	logger.Debugf("[API_STATUS] request: uid=%d, streamID=%s", req.UID, req.StreamID)
+	logger.Debugf("[API_STATUS] request: appID=%s, uid=%d, streamID=%s", req.AppID, req.UID, req.StreamID)
 
-	status, err := h.streamService.GetStreamStatus(req.UID, req.StreamID)
+	status, err := h.streamService.GetStreamStatus(req.AppID, req.UID, req.StreamID)
 	if err != nil {
 		if errors.Is(err, service.ErrStreamNotFound) {
-			logger.Warnf("[API_STATUS] not found: uid=%d, streamID=%s", req.UID, req.StreamID)
+			logger.Warnf("[API_STATUS] not found: appID=%s, uid=%d, streamID=%s", req.AppID, req.UID, req.StreamID)
 			fail(c, 404, "stream not found")
 			return
 		}
-		logger.Errorf("[API_STATUS] failed: uid=%d, streamID=%s, err=%v", req.UID, req.StreamID, err)
+		logger.Errorf("[API_STATUS] failed: appID=%s, uid=%d, streamID=%s, err=%v", req.AppID, req.UID, req.StreamID, err)
 		fail(c, 500, "get status failed: "+err.Error())
 		return
 	}
 
-	logger.Debugf("[API_STATUS] success: uid=%d, streamID=%s, status=%d", req.UID, status.StreamID, status.Status)
+	logger.Debugf("[API_STATUS] success: appID=%s, uid=%d, streamID=%s, status=%d", req.AppID, req.UID, status.StreamID, status.Status)
 	success(c, status)
 }
 
@@ -185,7 +185,8 @@ func (h *StreamHandler) List(c *gin.Context) {
 	}
 	req.Normalize()
 
-	logger.Debugf("[API_LIST] request: page=%d, pageSize=%d, status=%d", req.Page, req.PageSize, req.Status)
+	logger.Debugf("[API_LIST] request: appID=%s, uid=%v, page=%d, pageSize=%d, status=%v",
+		req.AppID, req.UID, req.Page, req.PageSize, req.Status)
 
 	resp, err := h.streamService.ListStreamsWithPagination(req)
 	if err != nil {
@@ -194,7 +195,7 @@ func (h *StreamHandler) List(c *gin.Context) {
 		return
 	}
 
-	logger.Debugf("[API_LIST] success: total=%d, returned=%d, cost=%dms",
-		resp.Total, len(resp.Streams), time.Since(startTime).Milliseconds())
+	logger.Debugf("[API_LIST] success: appID=%s, total=%d, returned=%d, cost=%dms",
+		req.AppID, resp.Total, len(resp.Streams), time.Since(startTime).Milliseconds())
 	success(c, resp)
 }

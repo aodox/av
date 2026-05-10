@@ -25,10 +25,12 @@ type Response struct {
 	Timestamp int64       `json:"timestamp"`
 }
 
-// ListStreamsRequest 列表请求
+// ListStreamsRequest 列表请求（支持多租户过滤）
 type ListStreamsRequest struct {
 	PageRequest
-	Status *int `form:"status" json:"status"`
+	AppID  string `form:"app_id" json:"app_id"`   // 多租户标识（推荐必填）
+	UID    *int64 `form:"uid" json:"uid"`         // 用户ID筛选
+	Status *int   `form:"status" json:"status"`   // 状态筛选
 }
 
 // ListStreamsResponse 列表响应

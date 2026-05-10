@@ -83,7 +83,7 @@ POST /api/v1/stream/create
 Content-Type: application/json
 
 {
-    "app_id": "customer_001",   // 可选，多租户标识，默认 "default"
+    "app_id": "customer_001",   // 必填，多租户标识
     "uid": 10001                // 必填，用户ID
 }
 ```
@@ -127,8 +127,8 @@ POST /api/v1/stream/close
 Content-Type: application/json
 
 {
-    "app_id": "customer_001",   // 可选
-    "uid": 10001,               // 必填
+    "app_id": "customer_001",   // 必填，多租户标识
+    "uid": 10001,               // 必填，用户ID
     "stream_id": ""             // 可选，不传则关闭该用户当前活跃流
 }
 ```
@@ -157,7 +157,7 @@ GET /api/v1/stream/push-url?app_id=customer_001&uid=10001&stream_id=xxx
 
 | 参数 | 必填 | 说明 |
 |------|------|------|
-| app_id | 否 | 多租户标识，推荐传递 |
+| app_id | 是 | 多租户标识 |
 | uid | 是 | 用户ID |
 | stream_id | 否 | 流ID |
 
@@ -193,7 +193,7 @@ GET /api/v1/stream/play-url?app_id=customer_001&uid=10001&stream_id=xxx
 
 | 参数 | 必填 | 说明 |
 |------|------|------|
-| app_id | 否 | 多租户标识，推荐传递 |
+| app_id | 是 | 多租户标识 |
 | uid | 是 | 用户ID |
 | stream_id | 否 | 流ID |
 
@@ -228,7 +228,7 @@ GET /api/v1/stream/status?app_id=customer_001&uid=10001&stream_id=xxx
 
 | 参数 | 必填 | 说明 |
 |------|------|------|
-| app_id | 否 | 多租户标识，推荐传递 |
+| app_id | 是 | 多租户标识 |
 | uid | 是 | 用户ID |
 | stream_id | 否 | 流ID |
 
@@ -270,7 +270,7 @@ GET /api/v1/stream/list?app_id=customer_001&uid=10001&page=1&page_size=20&status
 
 | 参数 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
-| app_id | 否 | - | 多租户标识，**强烈推荐传递** |
+| app_id | 是 | - | 多租户标识 |
 | uid | 否 | - | 用户ID筛选 |
 | page | 否 | 1 | 页码 |
 | page_size | 否 | 20 | 每页数量（最大100） |
@@ -362,12 +362,12 @@ GET /health
 
 | 场景 | app_id 是否必须 | 说明 |
 |------|----------------|------|
-| 创建流 | **强烈推荐** | 不传则默认为 `"default"` |
-| 关闭流 | **强烈推荐** | 确保关闭正确租户的流 |
-| 查询接口 | **强烈推荐** | 防止跨租户数据泄露 |
-| 列表查询 | **强烈推荐** | 按租户筛选数据 |
+| 创建流 | **必填** | 多租户标识 |
+| 关闭流 | **必填** | 确保关闭正确租户的流 |
+| 查询接口 | **必填** | 防止跨租户数据泄露 |
+| 列表查询 | **必填** | 按租户筛选数据 |
 
-> ⚠️ **最佳实践**：所有接口都应传递 `app_id`，确保多租户数据隔离。
+> ⚠️ **重要**：所有接口都**必须**传递 `app_id`，确保多租户数据隔离。
 
 ### 6.2 数据隔离机制
 

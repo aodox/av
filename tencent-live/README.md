@@ -320,33 +320,6 @@ Redis: pool_size=1000
 
 无限制。通过 `app_id` 隔离，同一 uid 在不同客户下互不冲突。
 
-### Q: 关播后能立即再开播吗？
-
-**有3秒冷却期**。腾讯云对同一流名称有短暂的保护期，关播后立即使用相同流名称开播可能失败。
-
-系统内置保护机制：
-1. **冷却期检查**：记录每个流的关闭时间，3秒内再开播会返回 `stream is in cooldown period`
-2. **腾讯云状态检查**：开播前检查腾讯云实际状态，如果流仍为 active 会返回 `stream is still active on Tencent Cloud`
-
-```json
-// 冷却期内开播返回
-{
-  "code": 400,
-  "message": "stream is in cooldown period, please wait a few seconds",
-  "request_id": "xxx"
-}
-```
-
-**建议**：客户端关播后等待3秒再允许用户重新开播。
-
-### Q: 冷却期可以修改吗？
-
-可以。修改 `internal/service/stream.go` 中的常量：
-
-```go
-const StreamCooldownSeconds = 3  // 修改这个值
-```
-
 ## License
 
 MIT

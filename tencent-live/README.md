@@ -166,20 +166,20 @@ go get github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/live@v1.3.93
 
 | 回调类型 | URL | event_type | 说明 |
 |---------|-----|------------|------|
-| ✅ 推流回调 | `http://YOUR_IP:8080/callback/push` | 1 | 开始推流 |
-| ✅ 断流回调 | `http://YOUR_IP:8080/callback/push` | 0 | 断开推流 |
-| ✅ 录制文件回调 | `http://YOUR_IP:8080/callback/push` | 100 | 录制完成 |
-| ✅ 截图回调 | `http://YOUR_IP:8080/callback/push` | 200 | 截图完成 |
-| ✅ 录制状态回调 | `http://YOUR_IP:8080/callback/push` | 332 | 录制状态变化 |
-| ✅ 图片审核回调 | `http://YOUR_IP:8080/callback/push` | 317 | 鉴黄结果 |
-| ✅ 音频审核回调 | `http://YOUR_IP:8080/callback/push` | 318 | 音频审核 |
+| ✅ 推流回调 | `http://YOUR_IP:8080/callback/event` | 1 | 开始推流 |
+| ✅ 断流回调 | `http://YOUR_IP:8080/callback/event` | 0 | 断开推流 |
+| ✅ 录制文件回调 | `http://YOUR_IP:8080/callback/event` | 100 | 录制完成 |
+| ✅ 截图回调 | `http://YOUR_IP:8080/callback/event` | 200 | 截图完成 |
+| ✅ 录制状态回调 | `http://YOUR_IP:8080/callback/event` | 332 | 录制状态变化 |
+| ✅ 图片审核回调 | `http://YOUR_IP:8080/callback/event` | 317 | 鉴黄结果 |
+| ✅ 音频审核回调 | `http://YOUR_IP:8080/callback/event` | 318 | 音频审核 |
 
 **异常事件回调**：
 
 | 回调类型 | URL | event_type | 说明 |
 |---------|-----|------------|------|
-| ✅ 推流异常回调 | `http://YOUR_IP:8080/callback/push` | 321 | 推流异常 |
-| ✅ 录制异常回调 | `http://YOUR_IP:8080/callback/push` | 341 | 录制异常 |
+| ✅ 推流异常回调 | `http://YOUR_IP:8080/callback/event` | 321 | 推流异常 |
+| ✅ 录制异常回调 | `http://YOUR_IP:8080/callback/event` | 341 | 录制异常 |
 
 > **注意**：所有回调都使用同一个URL，系统会自动识别并处理不同类型。
 
@@ -299,9 +299,11 @@ POST /api/v1/stream/close
 ### 腾讯云回调接口
 
 ```
-POST /callback/push
+POST /callback/event   # 推荐使用
+POST /callback/push    # 兼容旧配置
 
 腾讯云自动推送，无需手动调用
+所有回调类型统一入口，通过 event_type 区分
 ```
 
 ### 其他接口

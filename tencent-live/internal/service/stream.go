@@ -15,9 +15,15 @@ import (
 
 const DefaultAppID = "default"
 
+// StreamCooldownSeconds 关播后再开播的冷却时间（秒）
+// 腾讯云对同一流名称有短暂的保护期，关播后立即开播可能失败
+const StreamCooldownSeconds = 3
+
 var (
-	ErrStreamNotFound    = errors.New("stream not found")
-	ErrStreamAlreadyLive = errors.New("user already has an active stream")
+	ErrStreamNotFound      = errors.New("stream not found")
+	ErrStreamAlreadyLive   = errors.New("user already has an active stream")
+	ErrStreamInCooldown    = errors.New("stream is in cooldown period, please wait a few seconds")
+	ErrStreamStillActive   = errors.New("stream is still active on Tencent Cloud")
 )
 
 type StreamService struct {
@@ -49,8 +55,26 @@ func (s *StreamService) CreateStream(appID string, uid int64) (*model.CreateStre
 		}
 	}
 
-	streamID := tencent.GenerateStreamID(appID, uid)
 	streamName := tencent.GenerateStreamName(appID, uid)
+
+	// 检查冷却期：上次关播时间 + 冷却时间 > 当前时间
+	if lastCloseTime, err := cache.GetStreamCloseTime(streamName); err == nil && !lastCloseTime.IsZero() {
+		cooldownEnd := lastCloseTime.Add(time.Duration(StreamCooldownSeconds) * time.Second)
+		if time.Now().Before(cooldownEnd) {
+			remainingSeconds := int(cooldownEnd.Sub(time.Now()).Seconds()) + 1
+			logger.Warnf("stream in cooldown: appID=%s, uid=%d, remaining=%ds", appID, uid, remainingSeconds)
+			return nil, ErrStreamInCooldown
+		}
+	}
+
+	// 检查腾讯云实际状态（防止缓存与腾讯云状态不一致）
+	tencentState, err := s.client.DescribeStreamState(streamName)
+	if err == nil && tencentState == tencent.StreamStateActive {
+		logger.Warnf("stream still active on Tencent Cloud: appID=%s, uid=%d, streamName=%s", appID, uid, streamName)
+		return nil, ErrStreamStillActive
+	}
+
+	streamID := tencent.GenerateStreamID(appID, uid)
 	now := time.Now()
 
 	// 生成所有推流和拉流地址
@@ -187,6 +211,9 @@ func (s *StreamService) HandleDisconnectCallback(streamName string, eventTime in
 	cache.RemoveActiveStream(cacheKey)
 	cache.CleanupStream(stream.StreamID)
 
+	// 记录关闭时间（用于冷却期检查）
+	cache.SetStreamCloseTime(streamName, now)
+
 	// 记录每日统计
 	date := now.Format("2006-01-02")
 	cache.QueueDailyLog(&model.StreamDailyLog{
@@ -267,6 +294,9 @@ func (s *StreamService) CloseStream(appID string, uid int64, streamID string) er
 	cacheKey := s.buildCacheKey(stream.AppID, stream.UID)
 	cache.RemoveActiveStream(cacheKey)
 	cache.CleanupStream(stream.StreamID)
+
+	// 记录关闭时间（用于冷却期检查）
+	cache.SetStreamCloseTime(stream.StreamName, now)
 
 	logger.Infof("stream closed: appID=%s, uid=%d, streamID=%s, duration=%d",
 		stream.AppID, stream.UID, stream.StreamID, stream.Duration)

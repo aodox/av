@@ -22,7 +22,9 @@ const (
 	KeyActiveStreams    = "active_streams"
 	KeyStreamLastUpdate = "stream_last_update:"
 	KeyStreamRetry      = "stream_retry:"
+	KeyStreamCloseTime  = "stream_close_time:"
 	DefaultExpire       = 24 * time.Hour
+	CooldownExpire      = 60 * time.Second // 冷却时间缓存只保留60秒
 )
 
 func Init(cfg config.RedisConfig) error {
@@ -164,4 +166,23 @@ func CleanupStream(streamID string) error {
 		KeyStreamRetry + streamID,
 	}
 	return rdb.Del(ctx, keys...).Err()
+}
+
+// SetStreamCloseTime 记录流的关闭时间（用于冷却期检查）
+func SetStreamCloseTime(streamName string, t time.Time) error {
+	key := KeyStreamCloseTime + streamName
+	return rdb.Set(ctx, key, t.Unix(), CooldownExpire).Err()
+}
+
+// GetStreamCloseTime 获取流的关闭时间
+func GetStreamCloseTime(streamName string) (time.Time, error) {
+	key := KeyStreamCloseTime + streamName
+	unix, err := rdb.Get(ctx, key).Int64()
+	if err != nil {
+		if err == redis.Nil {
+			return time.Time{}, nil
+		}
+		return time.Time{}, err
+	}
+	return time.Unix(unix, 0), nil
 }

@@ -107,7 +107,7 @@ func (h *CallbackHandler) buildCallbackLog(req *model.TencentCallback, rawData s
 		AppName:       req.AppName,
 		UserIP:        req.UserIP,
 		EventTime:     req.EventTime,
-		PushDuration:  req.PushDuration,
+		PushDuration:  int64(req.PushDuration),
 		Errcode:       req.Errcode,
 		Errmsg:        req.Errmsg,
 		VideoID:       req.VideoID,
@@ -165,7 +165,7 @@ func (h *CallbackHandler) handleDisconnectEvent(req *model.TencentCallback) {
 	err := h.streamService.HandleDisconnectCallback(
 		req.StreamID,
 		req.EventTime,
-		req.PushDuration,
+		int64(req.PushDuration),
 		req.Errcode,
 		req.Errmsg,
 	)
@@ -176,13 +176,13 @@ func (h *CallbackHandler) handleDisconnectEvent(req *model.TencentCallback) {
 	errDesc := model.GetErrCodeDesc(req.Errcode)
 	if model.IsClientError(req.Errcode) {
 		logger.Infof("[CALLBACK_DISCONNECT] CLIENT: stream=%s, duration=%dms, errcode=%d(%s)",
-			req.StreamID, req.PushDuration, req.Errcode, errDesc)
+			req.StreamID, int64(req.PushDuration), req.Errcode, errDesc)
 	} else if model.IsServerError(req.Errcode) {
 		logger.Warnf("[CALLBACK_DISCONNECT] SERVER: stream=%s, duration=%dms, errcode=%d(%s)",
-			req.StreamID, req.PushDuration, req.Errcode, errDesc)
+			req.StreamID, int64(req.PushDuration), req.Errcode, errDesc)
 	} else {
 		logger.Infof("[CALLBACK_DISCONNECT] stream=%s, duration=%dms, errcode=%d(%s)",
-			req.StreamID, req.PushDuration, req.Errcode, errDesc)
+			req.StreamID, int64(req.PushDuration), req.Errcode, errDesc)
 	}
 }
 

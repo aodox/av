@@ -1,6 +1,39 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"strconv"
+	"time"
+)
+
+// FlexibleInt64 兼容 JSON 中数字或字符串形式的整型（腾讯云回调里 push_duration 等字段可能为字符串）
+type FlexibleInt64 int64
+
+func (f *FlexibleInt64) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		*f = 0
+		return nil
+	}
+	var n int64
+	if err := json.Unmarshal(data, &n); err == nil {
+		*f = FlexibleInt64(n)
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	if s == "" {
+		*f = 0
+		return nil
+	}
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return err
+	}
+	*f = FlexibleInt64(v)
+	return nil
+}
 
 // ==================== 回调事件类型 ====================
 
@@ -43,7 +76,7 @@ type TencentCallback struct {
 	StreamParam string `json:"stream_param"` // 推流参数
 
 	// 断流特有参数
-	PushDuration int64  `json:"push_duration"` // 推流时长(毫秒)
+	PushDuration FlexibleInt64 `json:"push_duration"` // 推流时长(毫秒)，腾讯云可能传字符串
 	Errcode      int    `json:"errcode"`       // 错误码
 	Errmsg       string `json:"errmsg"`        // 错误信息
 

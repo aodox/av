@@ -377,14 +377,37 @@ GET /health
 
 ### 6.3 流名称格式
 
+流名称格式由配置项 `stream.name_with_timestamp` 控制：
+
+**模式一：固定地址（默认）**
+```yaml
+stream:
+  name_with_timestamp: false
 ```
-stream_name = {app_id}_{uid}
-stream_id = {app_id}_{uid}_{timestamp}
+```
+stream_name = {app_id}_{uid}           # 固定不变
+stream_id   = {app_id}_{uid}_{timestamp}
 
 示例：
-stream_name = customer_001_10001
-stream_id = customer_001_10001_1699999999
+stream_name = customer_001_10001       # 每次开播相同
+stream_id   = customer_001_10001_1699999999
 ```
+**适用场景**：普通直播，观众可收藏直播间链接
+
+**模式二：每场独立**
+```yaml
+stream:
+  name_with_timestamp: true
+```
+```
+stream_name = {app_id}_{uid}_{timestamp}  # 每场不同
+stream_id   = {app_id}_{uid}_{timestamp}  # 与stream_name相同
+
+示例：
+stream_name = customer_001_10001_1699999999
+stream_id   = customer_001_10001_1699999999
+```
+**适用场景**：直播带货、需要独立回放的场景
 
 ### 6.4 典型用法
 

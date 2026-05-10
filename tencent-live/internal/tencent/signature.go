@@ -238,27 +238,56 @@ func GenerateStreamID(appID string, uid int64) string {
 }
 
 // GenerateStreamName 生成流名称（用于腾讯云推拉流）
-// 格式：appID_uid（多租户唯一标识）
-// 示例：customer001_521000018407113
-func GenerateStreamName(appID string, uid int64) string {
+// withTimestamp=false: 格式 appID_uid（固定地址，观众可收藏）
+// withTimestamp=true:  格式 appID_uid_timestamp（每场独立，适合回放）
+func GenerateStreamName(appID string, uid int64, withTimestamp bool) string {
+	if withTimestamp {
+		timestamp := time.Now().UnixNano() / 1000000
+		return fmt.Sprintf("%s_%d_%d", appID, uid, timestamp)
+	}
 	return fmt.Sprintf("%s_%d", appID, uid)
 }
 
 // ParseStreamName 解析流名称，返回 appID 和 uid
-// 支持格式：appID_uid
+// 支持两种格式：
+// - appID_uid（固定模式）
+// - appID_uid_timestamp（时间戳模式）
 func ParseStreamName(streamName string) (appID string, uid int64, err error) {
-	// 找最后一个下划线的位置
-	lastIdx := strings.LastIndex(streamName, "_")
-	if lastIdx == -1 || lastIdx == 0 || lastIdx == len(streamName)-1 {
+	parts := strings.Split(streamName, "_")
+	if len(parts) < 2 {
 		return "", 0, fmt.Errorf("invalid stream name format: %s", streamName)
 	}
 
-	appID = streamName[:lastIdx]
-	uidStr := streamName[lastIdx+1:]
+	// 最后一个部分可能是 uid 或 timestamp
+	// 倒数第二个部分在时间戳模式下是 uid
+	// 需要判断：如果有3个以上部分，且最后一个是纯数字（时间戳），则倒数第二个是uid
+	
+	var uidStr string
+	if len(parts) >= 3 {
+		// 检查最后一个是否像时间戳（13位数字）
+		lastPart := parts[len(parts)-1]
+		if len(lastPart) >= 13 {
+			// 可能是时间戳模式：appID_uid_timestamp
+			uidStr = parts[len(parts)-2]
+			appID = strings.Join(parts[:len(parts)-2], "_")
+		} else {
+			// 固定模式：appID_uid（appID可能包含下划线）
+			uidStr = parts[len(parts)-1]
+			appID = strings.Join(parts[:len(parts)-1], "_")
+		}
+	} else {
+		// 只有2部分：appID_uid
+		appID = parts[0]
+		uidStr = parts[1]
+	}
+
+	if appID == "" {
+		return "", 0, fmt.Errorf("invalid stream name format: %s", streamName)
+	}
 
 	uid, err = strconv.ParseInt(uidStr, 10, 64)
 	if err != nil {
-		return "", 0, fmt.Errorf("invalid uid in stream name: %s", streamName)
+		return "", 0, fmt.Errorf("invalid uid in stream name: %s, uidStr=%s", streamName, uidStr)
 	}
 
 	return appID, uid, nil

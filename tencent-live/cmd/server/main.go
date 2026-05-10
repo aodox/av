@@ -70,7 +70,8 @@ func main() {
 	logger.Info("tencent client initialized")
 
 	// 初始化服务
-	streamService := service.NewStreamService(tencentClient, cfg.Tencent)
+	streamService := service.NewStreamService(tencentClient, cfg.Tencent, cfg.Stream)
+	logger.Infof("stream config: nameWithTimestamp=%v", cfg.Stream.NameWithTimestamp)
 
 	// 启动流状态监控（作为回调的补充，处理异常情况）
 	monitor := service.NewMonitor(tencentClient, streamService, cfg.Monitor)

@@ -9,6 +9,7 @@ import (
 type Config struct {
 	Server      ServerConfig      `yaml:"server"`
 	Tencent     TencentConfig     `yaml:"tencent"`
+	Stream      StreamConfig      `yaml:"stream"`
 	MySQL       MySQLConfig       `yaml:"mysql"`
 	Redis       RedisConfig       `yaml:"redis"`
 	AsyncWriter AsyncWriterConfig `yaml:"async_writer"`
@@ -79,6 +80,14 @@ type LogConfig struct {
 	MaxSize    int    `yaml:"max_size"`
 	MaxBackups int    `yaml:"max_backups"`
 	MaxAge     int    `yaml:"max_age"`
+}
+
+// StreamConfig 流配置
+type StreamConfig struct {
+	// NameWithTimestamp 流名称是否包含时间戳
+	// true:  stream_name = {app_id}_{uid}_{timestamp} （每场直播独立，适合直播带货、回放场景）
+	// false: stream_name = {app_id}_{uid} （固定地址，适合普通直播，观众可收藏链接）
+	NameWithTimestamp bool `yaml:"name_with_timestamp"`
 }
 
 func Load(path string) (*Config, error) {

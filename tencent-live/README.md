@@ -222,6 +222,12 @@ tencent:
   play_auth_key: "your_play_key"
   callback_key: "your_callback_key"  # 回调签名验证
 
+# 流配置
+stream:
+  # false: stream_name = appID_uid（固定地址，观众可收藏）
+  # true:  stream_name = appID_uid_timestamp（每场独立，适合回放）
+  name_with_timestamp: false
+
 mysql:
   max_open_conns: 500   # 高并发配置
   max_idle_conns: 100

@@ -25,13 +25,15 @@ type StreamService struct {
 	client       *tencent.Client
 	urlGenerator *tencent.URLGenerator
 	cfg          config.TencentConfig
+	streamCfg    config.StreamConfig
 }
 
-func NewStreamService(client *tencent.Client, cfg config.TencentConfig) *StreamService {
+func NewStreamService(client *tencent.Client, cfg config.TencentConfig, streamCfg config.StreamConfig) *StreamService {
 	return &StreamService{
 		client:       client,
 		urlGenerator: tencent.NewURLGenerator(cfg),
 		cfg:          cfg,
+		streamCfg:    streamCfg,
 	}
 }
 
@@ -41,7 +43,7 @@ func (s *StreamService) CreateStream(appID string, uid int64) (*model.CreateStre
 	}
 
 	cacheKey := s.buildCacheKey(appID, uid)
-	streamName := tencent.GenerateStreamName(appID, uid)
+	streamName := tencent.GenerateStreamName(appID, uid, s.streamCfg.NameWithTimestamp)
 	now := time.Now()
 
 	// 场景1: 检查本地是否有活跃流记录

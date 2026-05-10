@@ -30,6 +30,13 @@ tencent:
   # 示例：customer001_521000018407113
   # 在腾讯云控制台「流管理」中可通过 StreamName 搜索
 
+# 流配置
+stream:
+  # 流名称是否包含时间戳
+  # false: stream_name = appID_uid（默认，固定地址，观众可收藏直播间链接）
+  # true:  stream_name = appID_uid_timestamp（每场直播独立，适合直播带货、需要回放的场景）
+  name_with_timestamp: false
+
 mysql:
   host: "127.0.0.1"
   port: 3306

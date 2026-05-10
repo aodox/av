@@ -8,12 +8,17 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"tencent-live/internal/config"
+	applogger "tencent-live/internal/logger"
 	"tencent-live/internal/model"
 )
 
 var DB *gorm.DB
 
 func Init(cfg config.MySQLConfig) error {
+	// 连接前日志（隐藏密码）
+	applogger.Infof("[MySQL] connecting to %s:%d/%s (user: %s)...",
+		cfg.Host, cfg.Port, cfg.Database, cfg.User)
+
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
 
@@ -21,11 +26,14 @@ func Init(cfg config.MySQLConfig) error {
 		Logger: logger.Default.LogMode(logger.Warn),
 	})
 	if err != nil {
-		return fmt.Errorf("connect mysql error: %w", err)
+		applogger.Errorf("[MySQL] connection failed: host=%s, port=%d, database=%s, user=%s, error=%v",
+			cfg.Host, cfg.Port, cfg.Database, cfg.User, err)
+		return fmt.Errorf("connect mysql error (host=%s:%d, db=%s): %w", cfg.Host, cfg.Port, cfg.Database, err)
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
+		applogger.Errorf("[MySQL] get sql.DB failed: %v", err)
 		return fmt.Errorf("get sql.DB error: %w", err)
 	}
 
@@ -36,9 +44,24 @@ func Init(cfg config.MySQLConfig) error {
 		sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetime) * time.Second)
 	}
 
+	// 测试连接
+	if err := sqlDB.Ping(); err != nil {
+		applogger.Errorf("[MySQL] ping failed: host=%s, port=%d, error=%v", cfg.Host, cfg.Port, err)
+		return fmt.Errorf("mysql ping error: %w", err)
+	}
+
+	applogger.Infof("[MySQL] connected successfully: host=%s, port=%d, database=%s",
+		cfg.Host, cfg.Port, cfg.Database)
+	applogger.Infof("[MySQL] connection pool: maxOpen=%d, maxIdle=%d, maxLifetime=%ds",
+		cfg.MaxOpenConns, cfg.MaxIdleConns, cfg.ConnMaxLifetime)
+
+	// 自动迁移
+	applogger.Info("[MySQL] auto migrating tables...")
 	if err := db.AutoMigrate(&model.Stream{}, &model.StreamDailyLog{}, &model.CallbackLog{}); err != nil {
+		applogger.Errorf("[MySQL] auto migrate failed: %v", err)
 		return fmt.Errorf("auto migrate error: %w", err)
 	}
+	applogger.Info("[MySQL] auto migrate completed: streams, stream_daily_logs, callback_logs")
 
 	DB = db
 	return nil

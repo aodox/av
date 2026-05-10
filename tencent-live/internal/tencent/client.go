@@ -53,20 +53,27 @@ func (c *Client) DescribeStreamState(streamName string) (StreamState, error) {
 	request.DomainName = &domainName
 	request.StreamName = &streamName
 
+	logger.Debugf("[TENCENT_API] DescribeLiveStreamState: domain=%s, app=%s, stream=%s",
+		domainName, appName, streamName)
+
 	response, err := c.client.DescribeLiveStreamState(request)
 	if err != nil {
 		if sdkErr, ok := err.(*errors.TencentCloudSDKError); ok {
-			logger.Errorf("describe stream state sdk error: %s", sdkErr.Error())
+			logger.Errorf("[TENCENT_API] DescribeLiveStreamState FAILED: stream=%s, code=%s, msg=%s",
+				streamName, sdkErr.Code, sdkErr.Message)
 			return StreamStateInactive, sdkErr
 		}
+		logger.Errorf("[TENCENT_API] DescribeLiveStreamState FAILED: stream=%s, err=%v", streamName, err)
 		return StreamStateInactive, err
 	}
 
+	state := StreamStateInactive
 	if response.Response != nil && response.Response.StreamState != nil {
-		return StreamState(*response.Response.StreamState), nil
+		state = StreamState(*response.Response.StreamState)
 	}
 
-	return StreamStateInactive, nil
+	logger.Debugf("[TENCENT_API] DescribeLiveStreamState OK: stream=%s, state=%s", streamName, state)
+	return state, nil
 }
 
 func (c *Client) ForbidStream(streamName string, resumeTime int64) error {
@@ -78,20 +85,28 @@ func (c *Client) ForbidStream(streamName string, resumeTime int64) error {
 	request.AppName = &appName
 	request.DomainName = &domainName
 	request.StreamName = &streamName
+
+	resumeTimeStr := ""
 	if resumeTime > 0 {
-		resumeTimeStr := time.Unix(resumeTime, 0).Format("2006-01-02T15:04:05Z")
+		resumeTimeStr = time.Unix(resumeTime, 0).Format("2006-01-02T15:04:05Z")
 		request.ResumeTime = &resumeTimeStr
 	}
+
+	logger.Infof("[TENCENT_API] ForbidLiveStream: domain=%s, app=%s, stream=%s, resumeTime=%s",
+		domainName, appName, streamName, resumeTimeStr)
 
 	_, err := c.client.ForbidLiveStream(request)
 	if err != nil {
 		if sdkErr, ok := err.(*errors.TencentCloudSDKError); ok {
-			logger.Errorf("forbid stream sdk error: %s", sdkErr.Error())
+			logger.Errorf("[TENCENT_API] ForbidLiveStream FAILED: stream=%s, code=%s, msg=%s",
+				streamName, sdkErr.Code, sdkErr.Message)
 			return sdkErr
 		}
+		logger.Errorf("[TENCENT_API] ForbidLiveStream FAILED: stream=%s, err=%v", streamName, err)
 		return err
 	}
 
+	logger.Infof("[TENCENT_API] ForbidLiveStream OK: stream=%s", streamName)
 	return nil
 }
 
@@ -105,15 +120,21 @@ func (c *Client) ResumeStream(streamName string) error {
 	request.DomainName = &domainName
 	request.StreamName = &streamName
 
+	logger.Infof("[TENCENT_API] ResumeLiveStream: domain=%s, app=%s, stream=%s",
+		domainName, appName, streamName)
+
 	_, err := c.client.ResumeLiveStream(request)
 	if err != nil {
 		if sdkErr, ok := err.(*errors.TencentCloudSDKError); ok {
-			logger.Errorf("resume stream sdk error: %s", sdkErr.Error())
+			logger.Errorf("[TENCENT_API] ResumeLiveStream FAILED: stream=%s, code=%s, msg=%s",
+				streamName, sdkErr.Code, sdkErr.Message)
 			return sdkErr
 		}
+		logger.Errorf("[TENCENT_API] ResumeLiveStream FAILED: stream=%s, err=%v", streamName, err)
 		return err
 	}
 
+	logger.Infof("[TENCENT_API] ResumeLiveStream OK: stream=%s", streamName)
 	return nil
 }
 
@@ -127,15 +148,21 @@ func (c *Client) DropStream(streamName string) error {
 	request.DomainName = &domainName
 	request.StreamName = &streamName
 
+	logger.Infof("[TENCENT_API] DropLiveStream: domain=%s, app=%s, stream=%s",
+		domainName, appName, streamName)
+
 	_, err := c.client.DropLiveStream(request)
 	if err != nil {
 		if sdkErr, ok := err.(*errors.TencentCloudSDKError); ok {
-			logger.Errorf("drop stream sdk error: %s", sdkErr.Error())
+			logger.Errorf("[TENCENT_API] DropLiveStream FAILED: stream=%s, code=%s, msg=%s",
+				streamName, sdkErr.Code, sdkErr.Message)
 			return sdkErr
 		}
+		logger.Errorf("[TENCENT_API] DropLiveStream FAILED: stream=%s, err=%v", streamName, err)
 		return err
 	}
 
+	logger.Infof("[TENCENT_API] DropLiveStream OK: stream=%s", streamName)
 	return nil
 }
 
@@ -165,8 +192,10 @@ func (c *Client) CreateMixStream(cfg MixStreamConfig) error {
 	}
 
 	var inputList []*live.CommonMixInputParam
+	var inputNames []string
 	for _, input := range cfg.Inputs {
 		streamName := input.StreamName
+		inputNames = append(inputNames, streamName)
 		x := float64(input.X)
 		y := float64(input.Y)
 		w := float64(input.Width)
@@ -186,15 +215,21 @@ func (c *Client) CreateMixStream(cfg MixStreamConfig) error {
 	}
 	request.InputStreamList = inputList
 
+	logger.Infof("[TENCENT_API] CreateCommonMixStream: sessionID=%s, output=%s, inputs=%v",
+		cfg.SessionID, cfg.OutputStreamName, inputNames)
+
 	_, err := c.client.CreateCommonMixStream(request)
 	if err != nil {
 		if sdkErr, ok := err.(*errors.TencentCloudSDKError); ok {
-			logger.Errorf("create mix stream sdk error: %s", sdkErr.Error())
+			logger.Errorf("[TENCENT_API] CreateCommonMixStream FAILED: sessionID=%s, code=%s, msg=%s",
+				cfg.SessionID, sdkErr.Code, sdkErr.Message)
 			return sdkErr
 		}
+		logger.Errorf("[TENCENT_API] CreateCommonMixStream FAILED: sessionID=%s, err=%v", cfg.SessionID, err)
 		return err
 	}
 
+	logger.Infof("[TENCENT_API] CreateCommonMixStream OK: sessionID=%s, output=%s", cfg.SessionID, cfg.OutputStreamName)
 	return nil
 }
 
@@ -202,14 +237,19 @@ func (c *Client) CancelMixStream(sessionID string) error {
 	request := live.NewCancelCommonMixStreamRequest()
 	request.MixStreamSessionId = &sessionID
 
+	logger.Infof("[TENCENT_API] CancelCommonMixStream: sessionID=%s", sessionID)
+
 	_, err := c.client.CancelCommonMixStream(request)
 	if err != nil {
 		if sdkErr, ok := err.(*errors.TencentCloudSDKError); ok {
-			logger.Errorf("cancel mix stream sdk error: %s", sdkErr.Error())
+			logger.Errorf("[TENCENT_API] CancelCommonMixStream FAILED: sessionID=%s, code=%s, msg=%s",
+				sessionID, sdkErr.Code, sdkErr.Message)
 			return sdkErr
 		}
+		logger.Errorf("[TENCENT_API] CancelCommonMixStream FAILED: sessionID=%s, err=%v", sessionID, err)
 		return err
 	}
 
+	logger.Infof("[TENCENT_API] CancelCommonMixStream OK: sessionID=%s", sessionID)
 	return nil
 }

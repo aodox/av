@@ -499,6 +499,180 @@ grep "SERVER_ISSUE" logs/app.log
 grep "uid=123456" logs/app.log
 ```
 
+## 日志系统详解
+
+### 日志配置
+
+```yaml
+log:
+  level: "info"           # debug / info / warn / error
+  filename: "./logs/app.log"
+  max_size: 100           # 单文件最大 MB
+  max_backups: 30         # 保留文件数
+  max_age: 7              # 保留天数
+  compress: true          # 是否压缩
+```
+
+### 日志前缀分类
+
+系统所有日志使用统一的前缀标识，方便快速定位问题：
+
+| 前缀 | 模块 | 说明 |
+|------|------|------|
+| `[MySQL]` | 数据库 | 连接、迁移、查询 |
+| `[Redis]` | 缓存 | 连接、读写 |
+| `[HTTP]` | 服务器 | 启动、监听 |
+| `[TENCENT_API]` | 腾讯云 | 所有腾讯云API调用 |
+| `[API_CREATE]` | 接口 | 创建流接口 |
+| `[API_CLOSE]` | 接口 | 关闭流接口 |
+| `[API_PUSH_URL]` | 接口 | 获取推流地址 |
+| `[API_PLAY_URL]` | 接口 | 获取拉流地址 |
+| `[API_STATUS]` | 接口 | 查询流状态 |
+| `[API_LIST]` | 接口 | 列表查询 |
+| `[CREATE]` | 业务 | 流创建逻辑 |
+| `[CLOSE]` | 业务 | 流关闭逻辑 |
+| `[FORCE_CLOSE]` | 业务 | 强制关闭旧流 |
+| `[CALLBACK]` | 回调 | 回调通用处理 |
+| `[CALLBACK_PUSH]` | 回调 | 推流回调 |
+| `[CALLBACK_DISCONNECT]` | 回调 | 断流回调 |
+| `[CALLBACK_RECORD]` | 回调 | 录制回调 |
+| `[CALLBACK_SCREENSHOT]` | 回调 | 截图回调 |
+| `[CALLBACK_PORN_IMG]` | 回调 | 图片审核 |
+| `[CALLBACK_PUSH_EXCEPTION]` | 回调 | 推流异常 |
+
+### MySQL/Redis 连接日志
+
+**连接成功示例**：
+```
+[MySQL] connecting to localhost:3306/tencent_live (user: root)...
+[MySQL] connected successfully: host=localhost, port=3306, database=tencent_live
+[MySQL] connection pool: maxOpen=500, maxIdle=100, maxLifetime=3600s
+[MySQL] auto migrate completed: streams, stream_daily_logs, callback_logs
+
+[Redis] connecting to localhost:6379 (db: 0, password: yes)...
+[Redis] connected successfully: addr=localhost:6379, db=0
+[Redis] connection pool: poolSize=1000, minIdle=100, maxRetries=3
+[Redis] timeouts: dial=5s, read=3s, write=3s
+```
+
+**连接失败示例**：
+```
+[MySQL] connecting to localhost:3306/tencent_live (user: root)...
+[MySQL] connection failed: host=localhost, port=3306, database=tencent_live, user=root, error=dial tcp 127.0.0.1:3306: connect: connection refused
+
+[Redis] connecting to localhost:6379 (db: 0, password: no)...
+[Redis] connection failed: addr=localhost:6379, db=0, error=dial tcp 127.0.0.1:6379: connect: connection refused
+```
+
+### 腾讯云API调用日志
+
+**所有腾讯云API调用都会记录**，包括请求参数和返回结果：
+
+```
+# 查询流状态
+[TENCENT_API] DescribeLiveStreamState: domain=tui.xinbot.xyz, app=live, stream=app001_10001
+[TENCENT_API] DescribeLiveStreamState OK: stream=app001_10001, state=active
+
+# 断流操作
+[TENCENT_API] DropLiveStream: domain=tui.xinbot.xyz, app=live, stream=app001_10001
+[TENCENT_API] DropLiveStream OK: stream=app001_10001
+
+# 禁播操作
+[TENCENT_API] ForbidLiveStream: domain=tui.xinbot.xyz, app=live, stream=app001_10001, resumeTime=2026-05-10T23:00:00Z
+[TENCENT_API] ForbidLiveStream OK: stream=app001_10001
+
+# API调用失败
+[TENCENT_API] DescribeLiveStreamState FAILED: stream=app001_10001, code=InvalidParameter, msg=参数错误
+```
+
+### HTTP接口日志
+
+**创建流**：
+```
+[API_CREATE] request: appID=customer001, uid=10001, ip=192.168.1.100
+[API_CREATE] success: appID=customer001, uid=10001, streamID=customer001_10001_1715356800, cost=12ms
+
+# 失败情况
+[API_CREATE] conflict: appID=customer001, uid=10001, already has active stream
+[API_CREATE] failed: appID=customer001, uid=10001, err=database error
+```
+
+**关闭流**：
+```
+[API_CLOSE] request: appID=customer001, uid=10001, streamID=customer001_10001_1715356800, ip=192.168.1.100
+[API_CLOSE] success: appID=customer001, uid=10001, streamID=customer001_10001_1715356800, cost=5ms
+
+# 失败情况
+[API_CLOSE] not found: appID=customer001, uid=10001, streamID=xxx
+```
+
+### 回调日志
+
+**推流回调**：
+```
+[CALLBACK] received: type=1(推流), stream=app001_10001, app=live, time=1715356800
+[CALLBACK_PUSH] stream=app001_10001, ip=192.168.1.100, width=1920, height=1080
+```
+
+**断流回调**：
+```
+[CALLBACK] received: type=0(断流), stream=app001_10001, app=live, time=1715360400
+[CALLBACK_DISCONNECT] CLIENT: stream=app001_10001, duration=3600000ms, errcode=1(客户端主动断流)
+
+# 服务端问题
+[CALLBACK_DISCONNECT] SERVER: stream=app001_10001, duration=1800000ms, errcode=5(系统内部错误)
+```
+
+**审核回调**：
+```
+[CALLBACK_PORN_IMG] ALERT: stream=app001_10001, porn_score=95.00, confidence=98.00, pic=https://xxx.jpg
+```
+
+### 问题排查示例
+
+```bash
+# 1. 查看今天的所有错误
+grep "ERROR" logs/app.log | grep "$(date +%Y-%m-%d)"
+
+# 2. 查看某用户的完整流程
+grep "uid=10001" logs/app.log
+
+# 3. 查看所有腾讯云API调用
+grep "\[TENCENT_API\]" logs/app.log
+
+# 4. 查看所有API失败
+grep "FAILED" logs/app.log
+
+# 5. 查看连接问题
+grep "connection failed" logs/app.log
+
+# 6. 查看服务端问题导致的断流
+grep "SERVER_ISSUE" logs/app.log
+
+# 7. 查看鉴权问题
+grep "AUTH_ISSUE" logs/app.log
+
+# 8. 查看强制关闭操作（旧流冲突处理）
+grep "\[FORCE_CLOSE\]" logs/app.log
+
+# 9. 查看接口耗时（性能分析）
+grep "cost=" logs/app.log | awk -F'cost=' '{print $2}' | sort -n
+
+# 10. 统计每种回调类型数量
+grep "\[CALLBACK\] received" logs/app.log | awk -F'type=' '{print $2}' | cut -d',' -f1 | sort | uniq -c
+```
+
+### 日志级别说明
+
+| 级别 | 用途 | 示例 |
+|------|------|------|
+| **Debug** | 高频调用详情（生产环境建议关闭） | 获取URL、列表查询 |
+| **Info** | 正常业务操作 | 创建流、关闭流、API调用成功 |
+| **Warn** | 可恢复问题 | 资源不存在、签名验证失败、回调过期 |
+| **Error** | 需要关注的问题 | 数据库错误、API调用失败、连接失败 |
+
+**生产环境建议**：日志级别设为 `info`，如需排查性能问题可临时改为 `debug`。
+
 ## License
 
 MIT

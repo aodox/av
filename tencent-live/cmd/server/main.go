@@ -44,18 +44,14 @@ func main() {
 
 	// 初始化 MySQL
 	if err := db.Init(cfg.MySQL); err != nil {
-		logger.Fatalf("init mysql error: %v", err)
+		logger.Fatalf("init mysql failed: %v", err)
 	}
-	logger.Infof("mysql connected: maxOpen=%d, maxIdle=%d",
-		cfg.MySQL.MaxOpenConns, cfg.MySQL.MaxIdleConns)
 
 	// 初始化 Redis
 	if err := cache.Init(cfg.Redis); err != nil {
-		logger.Fatalf("init redis error: %v", err)
+		logger.Fatalf("init redis failed: %v", err)
 	}
 	defer cache.Close()
-	logger.Infof("redis connected: poolSize=%d, minIdle=%d",
-		cfg.Redis.PoolSize, cfg.Redis.MinIdleConns)
 
 	// 初始化异步写入器（Redis优先，批量写MySQL）
 	cache.InitAsyncWriter(
@@ -99,10 +95,11 @@ func main() {
 	}
 
 	go func() {
-		logger.Infof("http server listening on :%d", cfg.Server.Port)
-		logger.Infof("callback url: http://YOUR_IP:%d/callback/push", cfg.Server.Port)
+		logger.Infof("[HTTP] server listening on :%d", cfg.Server.Port)
+		logger.Infof("[HTTP] callback url: http://YOUR_IP:%d/v1/callback/event", cfg.Server.Port)
+		logger.Infof("[HTTP] api base url: http://YOUR_IP:%d/api/v1/", cfg.Server.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatalf("listen error: %v", err)
+			logger.Fatalf("[HTTP] listen error: %v", err)
 		}
 	}()
 

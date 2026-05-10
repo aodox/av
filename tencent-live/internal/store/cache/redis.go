@@ -9,6 +9,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"tencent-live/internal/config"
+	"tencent-live/internal/logger"
 	"tencent-live/internal/model"
 )
 
@@ -26,8 +27,17 @@ const (
 )
 
 func Init(cfg config.RedisConfig) error {
+	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+	
+	// 连接前日志（隐藏密码）
+	hasPassword := "no"
+	if cfg.Password != "" {
+		hasPassword = "yes"
+	}
+	logger.Infof("[Redis] connecting to %s (db: %d, password: %s)...", addr, cfg.DB, hasPassword)
+
 	rdb = redis.NewClient(&redis.Options{
-		Addr:         fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+		Addr:         addr,
 		Password:     cfg.Password,
 		DB:           cfg.DB,
 		PoolSize:     cfg.PoolSize,
@@ -38,11 +48,32 @@ func Init(cfg config.RedisConfig) error {
 		WriteTimeout: time.Duration(cfg.WriteTimeout) * time.Second,
 	})
 
+	// 测试连接
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		return fmt.Errorf("redis ping error: %w", err)
+		logger.Errorf("[Redis] connection failed: addr=%s, db=%d, error=%v", addr, cfg.DB, err)
+		return fmt.Errorf("redis connection error (addr=%s, db=%d): %w", addr, cfg.DB, err)
 	}
 
+	// 获取 Redis 服务器信息
+	info, err := rdb.Info(ctx, "server").Result()
+	if err == nil {
+		logger.Debugf("[Redis] server info: %s", info[:min(len(info), 200)])
+	}
+
+	logger.Infof("[Redis] connected successfully: addr=%s, db=%d", addr, cfg.DB)
+	logger.Infof("[Redis] connection pool: poolSize=%d, minIdle=%d, maxRetries=%d",
+		cfg.PoolSize, cfg.MinIdleConns, cfg.MaxRetries)
+	logger.Infof("[Redis] timeouts: dial=%ds, read=%ds, write=%ds",
+		cfg.DialTimeout, cfg.ReadTimeout, cfg.WriteTimeout)
+
 	return nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func Close() {

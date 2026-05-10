@@ -1,0 +1,75 @@
+server:
+  port: 8080
+  mode: release  # debug/release
+
+tencent:
+  # 腾讯云API密钥（用于调用腾讯云API，如查询流状态）
+  secret_id: "${TENCENT_SECRET_ID}"
+  secret_key: "${TENCENT_SECRET_KEY}"
+  
+  # 推流域名（如：tui.xinbot.xyz）
+  push_domain: "tui.xinbot.xyz"
+  # 播放域名（如：bo.xinbot.xyz）
+  play_domain: "bo.xinbot.xyz"
+  # 应用名称（对应腾讯云控制台的 AppName，如：xinbiaoxiaoyu）
+  app_name: "xinbiaoxiaoyu"
+  
+  # 推流鉴权Key（在腾讯云控制台 域名管理->推流域名->管理->鉴权配置 中获取）
+  push_auth_key: "${TENCENT_PUSH_AUTH_KEY}"
+  # 播放鉴权Key（在腾讯云控制台 域名管理->播放域名->管理->鉴权配置 中获取）
+  play_auth_key: "${TENCENT_PLAY_AUTH_KEY}"
+  # 回调签名Key（用于验证腾讯云推送的回调请求）
+  callback_key: "${TENCENT_CALLBACK_KEY}"
+  
+  # 鉴权有效时间（秒），推荐86400（24小时）
+  expire_seconds: 86400
+  bizid: 0
+  region: "ap-shanghai"
+  
+  # 流名称格式（多租户）：appID_uid
+  # 示例：customer001_521000018407113
+  # 在腾讯云控制台「流管理」中可通过 StreamName 搜索
+
+mysql:
+  host: "127.0.0.1"
+  port: 3306
+  user: "root"
+  password: "${MYSQL_PASSWORD}"
+  database: "tencent_live"
+  # 高并发连接池配置
+  max_open_conns: 500        # 最大打开连接数
+  max_idle_conns: 100        # 最大空闲连接数
+  conn_max_lifetime: 3600    # 连接最大生命周期(秒)
+
+redis:
+  host: "127.0.0.1"
+  port: 6379
+  password: "${REDIS_PASSWORD}"
+  db: 0
+  # 高并发连接池配置
+  pool_size: 1000            # 连接池大小
+  min_idle_conns: 100        # 最小空闲连接
+  max_retries: 3             # 最大重试次数
+  dial_timeout: 5            # 连接超时(秒)
+  read_timeout: 3            # 读超时(秒)
+  write_timeout: 3           # 写超时(秒)
+
+async_writer:
+  batch_size: 1000           # 批量写入大小
+  interval_ms: 1000          # 写入间隔(毫秒)
+
+monitor:
+  # 监控作为回调的补充，处理异常断流情况
+  enabled: true
+  interval_seconds: 60       # 监控轮询间隔（秒）
+  max_inactive_retry: 3      # inactive状态重试次数
+  max_qps: 200               # 腾讯云API最大QPS
+  worker_count: 10           # 并发worker数量
+  batch_size: 500            # 每批次处理数量
+
+log:
+  level: "info"
+  file: "./logs/server.log"
+  max_size: 100
+  max_backups: 10
+  max_age: 30

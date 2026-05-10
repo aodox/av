@@ -50,10 +50,18 @@ type Stream struct {
 	PlayHLS    string `gorm:"type:varchar(512)" json:"play_hls,omitempty"`
 	PlayWebRTC string `gorm:"type:varchar(512)" json:"play_webrtc,omitempty"`
 
+	// 视频参数（从推流回调获取）
+	Width      int    `gorm:"default:0" json:"width,omitempty"`            // 视频宽度
+	Height     int    `gorm:"default:0" json:"height,omitempty"`           // 视频高度
+	VideoCodec string `gorm:"type:varchar(16)" json:"video_codec,omitempty"` // 视频编码
+	AudioCodec string `gorm:"type:varchar(16)" json:"audio_codec,omitempty"` // 音频编码
+	FPS        int    `gorm:"default:0" json:"fps,omitempty"`              // 帧率
+	Bitrate    int    `gorm:"default:0" json:"bitrate,omitempty"`          // 码率(kbps)
+
 	// 回调信息
-	UserIP    string `gorm:"type:varchar(64)" json:"user_ip,omitempty"`
-	ErrCode   int    `gorm:"default:0" json:"err_code,omitempty"`
-	ErrMsg    string `gorm:"type:varchar(256)" json:"err_msg,omitempty"`
+	UserIP  string `gorm:"type:varchar(64)" json:"user_ip,omitempty"`  // 推流用户IP
+	ErrCode int    `gorm:"default:0" json:"err_code,omitempty"`        // 断流错误码
+	ErrMsg  string `gorm:"type:varchar(256)" json:"err_msg,omitempty"` // 断流错误信息
 
 	StartTime     *time.Time `json:"start_time,omitempty"`
 	EndTime       *time.Time `json:"end_time,omitempty"`

@@ -190,37 +190,70 @@ func (s *StreamService) cleanupStreamCache(stream *model.Stream) {
 	cache.CleanupStream(stream.StreamID)
 }
 
+// PushCallbackParams 推流回调参数
+type PushCallbackParams struct {
+	StreamName string
+	EventTime  int64
+	UserIP     string
+	Width      int
+	Height     int
+	VideoCodec string
+	AudioCodec string
+	FPS        int
+	Bitrate    int
+}
+
 // HandlePushCallback 处理推流回调（腾讯云主动推送）
-func (s *StreamService) HandlePushCallback(streamName string, eventTime int64, userIP string) error {
+func (s *StreamService) HandlePushCallback(params PushCallbackParams) error {
 	// 从流名称解析 appID 和 uid
-	appID, uid, err := tencent.ParseStreamName(streamName)
+	appID, uid, err := tencent.ParseStreamName(params.StreamName)
 	if err != nil {
-		logger.Warnf("[CALLBACK_PUSH] parse stream name error: streamName=%s, err=%v", streamName, err)
+		logger.Warnf("[CALLBACK_PUSH] parse stream name error: streamName=%s, err=%v", params.StreamName, err)
 		return nil // 不返回错误，避免腾讯云重试
 	}
 
 	// 查找对应的流
-	stream, err := s.getStreamByName(streamName)
+	stream, err := s.getStreamByName(params.StreamName)
 	if err != nil {
 		// 可能是先收到回调，后创建本地记录（极端情况）
 		logger.Warnf("[CALLBACK_PUSH] stream not found: streamName=%s, appID=%s, uid=%d, ip=%s (may be orphan push)",
-			streamName, appID, uid, userIP)
+			params.StreamName, appID, uid, params.UserIP)
 		return nil
 	}
 
-	// 更新流状态
-	now := time.Unix(eventTime, 0)
+	// 更新流状态和视频参数
+	now := time.Unix(params.EventTime, 0)
 	oldStatus := stream.Status
 	stream.Status = model.StreamStatusActive
-	stream.UserIP = userIP
+	stream.UserIP = params.UserIP
 	stream.LastCheckTime = &now
+
+	// 更新视频参数（如果有）
+	if params.Width > 0 {
+		stream.Width = params.Width
+	}
+	if params.Height > 0 {
+		stream.Height = params.Height
+	}
+	if params.VideoCodec != "" {
+		stream.VideoCodec = params.VideoCodec
+	}
+	if params.AudioCodec != "" {
+		stream.AudioCodec = params.AudioCodec
+	}
+	if params.FPS > 0 {
+		stream.FPS = params.FPS
+	}
+	if params.Bitrate > 0 {
+		stream.Bitrate = params.Bitrate
+	}
 
 	// 异步更新
 	cache.QueueStreamUpdate(stream)
 	cache.ResetRetryCount(stream.StreamID)
 
-	logger.Infof("[CALLBACK_PUSH] appID=%s, uid=%d, streamID=%s, streamName=%s, ip=%s, oldStatus=%d, eventTime=%s",
-		appID, uid, stream.StreamID, streamName, userIP, oldStatus, now.Format("2006-01-02 15:04:05"))
+	logger.Infof("[CALLBACK_PUSH] appID=%s, uid=%d, streamID=%s, streamName=%s, ip=%s, resolution=%dx%d, oldStatus=%d, eventTime=%s",
+		appID, uid, stream.StreamID, params.StreamName, params.UserIP, params.Width, params.Height, oldStatus, now.Format("2006-01-02 15:04:05"))
 
 	return nil
 }

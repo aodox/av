@@ -144,11 +144,19 @@ func (h *CallbackHandler) md5(s string) string {
 
 // handlePushEvent 处理推流回调
 func (h *CallbackHandler) handlePushEvent(req *model.TencentCallback) {
-	err := h.streamService.HandlePushCallback(req.StreamID, req.EventTime, req.UserIP)
+	params := service.PushCallbackParams{
+		StreamName: req.StreamID,
+		EventTime:  req.EventTime,
+		UserIP:     req.UserIP,
+		Width:      req.Width,
+		Height:     req.Height,
+		// VideoCodec, AudioCodec, FPS, Bitrate 需要从 stream_param 解析或等待腾讯云回调扩展
+	}
+	err := h.streamService.HandlePushCallback(params)
 	if err != nil {
 		logger.Errorf("[CALLBACK_PUSH] handle error: stream=%s, err=%v", req.StreamID, err)
 	}
-	logger.Infof("[CALLBACK_PUSH] stream=%s, ip=%s, width=%d, height=%d",
+	logger.Infof("[CALLBACK_PUSH] stream=%s, ip=%s, resolution=%dx%d",
 		req.StreamID, req.UserIP, req.Width, req.Height)
 }
 

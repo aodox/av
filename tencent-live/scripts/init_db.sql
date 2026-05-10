@@ -37,6 +37,14 @@ CREATE TABLE `streams` (
     `play_hls` VARCHAR(512) DEFAULT NULL COMMENT 'HLS播放地址（M3U8）',
     `play_web_rtc` VARCHAR(512) DEFAULT NULL COMMENT 'WebRTC播放地址',
     
+    -- 视频参数（从推流回调获取）
+    `width` INT DEFAULT 0 COMMENT '视频宽度',
+    `height` INT DEFAULT 0 COMMENT '视频高度',
+    `video_codec` VARCHAR(16) DEFAULT NULL COMMENT '视频编码(H264/H265)',
+    `audio_codec` VARCHAR(16) DEFAULT NULL COMMENT '音频编码(AAC/MP3)',
+    `fps` INT DEFAULT 0 COMMENT '帧率',
+    `bitrate` INT DEFAULT 0 COMMENT '码率(kbps)',
+    
     -- 回调信息
     `user_ip` VARCHAR(64) DEFAULT NULL COMMENT '推流用户IP',
     `err_code` INT DEFAULT 0 COMMENT '断流错误码',
@@ -162,7 +170,145 @@ CREATE TABLE `callback_logs` (
 -- event_type = 341: 录制异常回调
 
 -- ============================================================
+-- 多租户配置表
+-- 存储每个租户的独立配置（如腾讯云账号、域名等）
+-- ============================================================
+DROP TABLE IF EXISTS `app_configs`;
+CREATE TABLE `app_configs` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '自增主键',
+    `app_id` VARCHAR(32) NOT NULL COMMENT '租户标识（唯一）',
+    `app_name` VARCHAR(64) DEFAULT NULL COMMENT '租户名称',
+    `app_secret` VARCHAR(64) DEFAULT NULL COMMENT '租户密钥（用于API鉴权）',
+    `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态: 0=禁用, 1=启用',
+    
+    -- 腾讯云配置（可选，不填则使用全局配置）
+    `tencent_secret_id` VARCHAR(128) DEFAULT NULL COMMENT '腾讯云 SecretId',
+    `tencent_secret_key` VARCHAR(128) DEFAULT NULL COMMENT '腾讯云 SecretKey',
+    `push_domain` VARCHAR(128) DEFAULT NULL COMMENT '推流域名',
+    `play_domain` VARCHAR(128) DEFAULT NULL COMMENT '播放域名',
+    `push_auth_key` VARCHAR(64) DEFAULT NULL COMMENT '推流鉴权Key',
+    `play_auth_key` VARCHAR(64) DEFAULT NULL COMMENT '播放鉴权Key',
+    
+    -- 业务限制
+    `max_streams` INT DEFAULT 0 COMMENT '最大同时开播数(0=不限)',
+    `max_duration` INT DEFAULT 0 COMMENT '单次最大直播时长(秒,0=不限)',
+    `max_bitrate` INT DEFAULT 0 COMMENT '最大码率(kbps,0=不限)',
+    
+    -- 回调配置
+    `callback_url` VARCHAR(256) DEFAULT NULL COMMENT '自定义回调地址',
+    `callback_key` VARCHAR(64) DEFAULT NULL COMMENT '回调签名Key',
+    
+    `remark` VARCHAR(256) DEFAULT NULL COMMENT '备注',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_app_id` (`app_id`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='多租户配置表';
+
+-- ============================================================
+-- 禁播记录表
+-- 记录被禁止推流的流/用户
+-- ============================================================
+DROP TABLE IF EXISTS `stream_bans`;
+CREATE TABLE `stream_bans` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '自增主键',
+    `app_id` VARCHAR(32) NOT NULL DEFAULT 'default' COMMENT '租户标识',
+    `uid` BIGINT NOT NULL COMMENT '用户ID',
+    `stream_name` VARCHAR(128) DEFAULT NULL COMMENT '被禁的流名称(NULL=禁止该用户所有流)',
+    `ban_type` TINYINT NOT NULL DEFAULT 1 COMMENT '禁播类型: 1=临时, 2=永久',
+    `reason` VARCHAR(256) DEFAULT NULL COMMENT '禁播原因',
+    `operator` VARCHAR(64) DEFAULT NULL COMMENT '操作人',
+    `expire_time` DATETIME DEFAULT NULL COMMENT '解禁时间(永久禁播为NULL)',
+    `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态: 0=已解禁, 1=禁播中',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    
+    PRIMARY KEY (`id`),
+    KEY `idx_app_uid` (`app_id`, `uid`),
+    KEY `idx_stream_name` (`stream_name`),
+    KEY `idx_status` (`status`),
+    KEY `idx_expire_time` (`expire_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='禁播记录表';
+
+-- ============================================================
+-- 操作日志表
+-- 记录后台管理操作（用于审计）
+-- ============================================================
+DROP TABLE IF EXISTS `operation_logs`;
+CREATE TABLE `operation_logs` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '自增主键',
+    `app_id` VARCHAR(32) DEFAULT NULL COMMENT '租户标识',
+    `operator` VARCHAR(64) NOT NULL COMMENT '操作人',
+    `operator_ip` VARCHAR(64) DEFAULT NULL COMMENT '操作人IP',
+    `action` VARCHAR(32) NOT NULL COMMENT '操作类型: create_stream, close_stream, ban_user, etc',
+    `target_type` VARCHAR(32) DEFAULT NULL COMMENT '目标类型: stream, user, app, etc',
+    `target_id` VARCHAR(128) DEFAULT NULL COMMENT '目标ID',
+    `before_data` TEXT DEFAULT NULL COMMENT '操作前数据(JSON)',
+    `after_data` TEXT DEFAULT NULL COMMENT '操作后数据(JSON)',
+    `remark` VARCHAR(256) DEFAULT NULL COMMENT '备注',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    
+    PRIMARY KEY (`id`),
+    KEY `idx_app_id` (`app_id`),
+    KEY `idx_operator` (`operator`),
+    KEY `idx_action` (`action`),
+    KEY `idx_target` (`target_type`, `target_id`),
+    KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作日志表';
+
+-- ============================================================
+-- 实时统计表
+-- 缓存热点统计数据（定时更新）
+-- ============================================================
+DROP TABLE IF EXISTS `realtime_stats`;
+CREATE TABLE `realtime_stats` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '自增主键',
+    `app_id` VARCHAR(32) NOT NULL DEFAULT 'default' COMMENT '租户标识',
+    `stat_type` VARCHAR(32) NOT NULL COMMENT '统计类型: total_streams, active_streams, total_duration, etc',
+    `stat_value` BIGINT NOT NULL DEFAULT 0 COMMENT '统计值',
+    `stat_date` VARCHAR(10) DEFAULT NULL COMMENT '统计日期(可选)',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_app_type_date` (`app_id`, `stat_type`, `stat_date`),
+    KEY `idx_stat_type` (`stat_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='实时统计表';
+
+-- ============================================================
 -- 示例数据（可选）
 -- ============================================================
 -- INSERT INTO streams (app_id, uid, stream_id, stream_name, status) 
 -- VALUES ('default', 10001, 'default_10001_1699999999', 'default_10001', 1);
+
+-- 插入默认租户配置
+INSERT INTO `app_configs` (`app_id`, `app_name`, `status`, `remark`) 
+VALUES ('default', '默认租户', 1, '系统默认租户，未指定app_id时使用');
+
+-- ============================================================
+-- 常用查询SQL（供Webman后台参考）
+-- ============================================================
+
+-- 1. 查询某租户当前活跃流数量
+-- SELECT COUNT(*) FROM streams WHERE app_id = 'xxx' AND status = 1;
+
+-- 2. 查询某租户今日开播次数和总时长
+-- SELECT SUM(stream_count) as total_count, SUM(duration) as total_duration 
+-- FROM stream_daily_logs WHERE app_id = 'xxx' AND date = '2026-05-10';
+
+-- 3. 查询某用户的直播历史
+-- SELECT * FROM streams WHERE app_id = 'xxx' AND uid = 10001 ORDER BY created_at DESC LIMIT 20;
+
+-- 4. 查询异常断流记录
+-- SELECT * FROM callback_logs WHERE event_type = 0 AND errcode > 0 ORDER BY created_at DESC LIMIT 100;
+
+-- 5. 查询鉴黄告警
+-- SELECT * FROM callback_logs WHERE event_type = 317 AND porn_score > 80 ORDER BY created_at DESC;
+
+-- 6. 统计各租户直播数据
+-- SELECT app_id, COUNT(*) as stream_count, SUM(duration) as total_duration 
+-- FROM streams GROUP BY app_id;
+
+-- 7. 查询被禁播的用户
+-- SELECT * FROM stream_bans WHERE status = 1 ORDER BY created_at DESC;

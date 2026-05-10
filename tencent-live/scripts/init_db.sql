@@ -59,7 +59,7 @@ CREATE TABLE `streams` (
     
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_stream_id` (`stream_id`),
-    KEY `idx_app_uid` (`app_id`, `uid`),
+    KEY `idx_app_uid_status` (`app_id`, `uid`, `status`),  -- 多租户查询优化
     KEY `idx_stream_name` (`stream_name`),
     KEY `idx_status` (`status`),
     KEY `idx_start_time` (`start_time`),

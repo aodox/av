@@ -23,7 +23,7 @@ func Init(cfg config.MySQLConfig) error {
 		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
 
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger: logger.Default.LogMode(logger.Error), // 只记录真正的错误，忽略 "record not found"
 	})
 	if err != nil {
 		applogger.Errorf("[MySQL] connection failed: host=%s, port=%d, database=%s, user=%s, error=%v",
